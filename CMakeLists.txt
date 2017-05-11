@@ -79,7 +79,18 @@ IF(EIGEN3_FOUND)
   ENDIF(${EIGEN3_VERSION} VERSION_GREATER "3.2.10")
 ENDIF(EIGEN3_FOUND)
 
-SET(BOOST_REQUIERED_COMPONENTS filesystem system)
+#share/acado/cmake
+MESSAGE(STATUS "*** " $ENV{ACADO_INSTALL_DIR})
+
+SET(ACADO_DIR $ENV{ACADO_INSTALL_DIR})
+SET( ACADO_INCLUDE_DIRS ${ACADO_DIR}/include/acado ${ACADO_DIR}/include )
+SET( ACADO_LIBRARY_DIRS ${ACADO_DIR}/lib )
+SET( ACADO_SHARED_LIBRARIES acado_toolkit_s )
+INCLUDE_DIRECTORIES( ${ACADO_INCLUDE_DIRS} )
+LINK_DIRECTORIES(${ACADO_LIBRARY_DIRS})
+
+set (CMAKE_CXX_FLAGS "--std=gnu++11 ${CMAKE_CXX_FLAGS}")
+SET(BOOST_REQUIERED_COMPONENTS filesystem system program_options)
 SET(BOOST_BUILD_COMPONENTS unit_test_framework)
 SET(BOOST_OPTIONAL_COMPONENTS "")
 
@@ -123,6 +134,7 @@ ENDFOREACH(header)
 ADD_SUBDIRECTORY(src)
 
 # --- BINDINGS -----------------------------------------------------------------
+SET(PYWRAP ${PROJECT_NAME}_pywrap)
 ADD_SUBDIRECTORY(bindings)
 
 # --- UNIT TESTS ---------------------------------------------------------------
