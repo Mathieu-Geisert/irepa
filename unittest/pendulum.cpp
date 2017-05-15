@@ -63,14 +63,14 @@ int main(int argc, const char ** argv ){
       for(int loop=0;loop<a_shift;++loop) Xs.shiftBackwards();
     }
 
-  if (vm.count("statefromfile")==0)
+  if (vm.count("statefromfile")==0) // Init config explicit from option.
     {
       a_p0 = vm["initpos"].as< std::vector<double> >();
       a_p0.resize(1);
       a_v0 = vm["initvel"].as< std::vector<double> >();
       a_v0.resize(1);
     }
-  else
+  else // Init config from state file.
     {
       std::cout << "Auto init pos = " << Xs(0,0) << ", " << Xs(0,1) << std::endl;
       a_p0.resize(1); a_p0[0] = Xs(0,0);
@@ -91,8 +91,9 @@ int main(int argc, const char ** argv ){
 
   //  -------------------------------------
   OCP ocp( 0.0, a_T, a_d );                        // time horizon of the OCP: [0,T]
-  //ocp.minimizeLagrangeTerm( -cos(p)*5 + 10*v*v + 1e-4*u*u );
-  ocp.minimizeLagrangeTerm( p*p );
+  //ocp.minimizeLagrangeTerm( -cos(p)*5 + 1e-1*v*v + 1e-3*u*u );
+  ocp.minimizeLagrangeTerm( p*p + 1e-3*v*v + 1e-3*u*u);
+  //ocp.minimizeLagrangeTerm( p*p );
 
   f << dot(p) == v;                         // an implementation
   f << dot(v) == u/I + l*sin(p)/I;          // of the model equations
@@ -134,17 +135,17 @@ int main(int argc, const char ** argv ){
 
 
   
-  //const double Kp=4.0,Kv=4.0;
-  //for(int i=0;i<20;++i)
-  //Us(i,0) = -Kp*Xs(i,0) - Kv*Xs(i,1);
-  IntegratorRK78 integrator(f);
-  double x0[2] = {0.,1.};
-  double u0[1] = {0.};
-  integrator.integrate(0.,0.1,x0,0,0,u0);
-  VariablesGrid differentialStates;
-  integrator.getX( differentialStates );
-  std::cout << "*** x = " << differentialStates[0] << std::endl;
-  //integrator.integrate( t_start, t_end, x_start, 0, p, u );
+  // //const double Kp=4.0,Kv=4.0;
+  // //for(int i=0;i<20;++i)
+  // //Us(i,0) = -Kp*Xs(i,0) - Kv*Xs(i,1);
+  // IntegratorRK78 integrator(f);
+  // double x0[2] = {0.,1.};
+  // double u0[1] = {0.};
+  // integrator.integrate(0.,0.1,x0,0,0,u0);
+  // VariablesGrid differentialStates;
+  // integrator.getX( differentialStates );
+  // std::cout << "*** x = " << differentialStates[0] << std::endl;
+  // //integrator.integrate( t_start, t_end, x_start, 0, p, u );
 
 
 
