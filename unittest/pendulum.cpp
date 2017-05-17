@@ -92,15 +92,20 @@ int main(int argc, const char ** argv ){
   //  -------------------------------------
   OCP ocp( 0.0, a_T, a_d );                        // time horizon of the OCP: [0,T]
   //ocp.minimizeLagrangeTerm( -cos(p)*5 + 1e-1*v*v + 1e-3*u*u );
-  ocp.minimizeLagrangeTerm( p*p + 1e-3*v*v + 1e-3*u*u);
+  IntermediateState cost = p*p + 1e-3*v*v + 1e-3*u*u;
+  ocp.minimizeLagrangeTerm(cost);
   //ocp.minimizeLagrangeTerm( p*p );
 
   f << dot(p) == v;                         // an implementation
   f << dot(v) == u/I + l*sin(p)/I;          // of the model equations
 
+  //DifferentialState integral;
+  //f << dot(integral) == cost;
+
   ocp.subjectTo( f                   );     // minimize T s.t. the model,
   ocp.subjectTo( AT_START, p ==  a_p0[0] );     // the initial values for s,
   ocp.subjectTo( AT_START, v ==  a_v0[0] );     // v,
+  //ocp.subjectTo( AT_START, integral ==  0.0 );     // v,
 
   //ocp.subjectTo( AT_END  , cos(p) ==  1.0 );     // the terminal constraints for s
   //ocp.subjectTo( AT_END  , p ==  0.0 );     // the terminal constraints for s
@@ -108,6 +113,8 @@ int main(int argc, const char ** argv ){
 
   ocp.subjectTo( -8.0 <= v <=  8.0   );     // as well as the bounds on v
   ocp.subjectTo( -2. <= u <=  2.   );     // the control input u,
+
+
   //  -------------------------------------
 
 
@@ -119,6 +126,8 @@ int main(int argc, const char ** argv ){
       window.addSubplot( v, "THE VELOCITY v"      );
       window.addSubplot( u, "THE CONTROL INPUT u" );
       window.addSubplot( p, "THE ANGLE p"      );
+      window.addSubplot( cost, "COST"      );
+      //window.addSubplot( integral, "INTEGRAL"      );
       algorithm << window;
     }
 
