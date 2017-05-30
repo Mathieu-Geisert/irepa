@@ -61,6 +61,10 @@ class Pendulum:
         self.data       = self.model.createData()
 
         self.q0         = zero(self.model.nq)
+        self.qlow       = -5.
+        self.qup        = +5.
+        self.vlow       = -6
+        self.vup        = +6
 
         self.DT         = 5e-2   # Step length
         self.NDT        = 2      # Number of Euler steps per integration (internal)
@@ -116,8 +120,8 @@ class Pendulum:
 
     def reset(self,x0=None):
         if x0 is None: 
-            q0 = np.pi*(rand(self.nq)*2-1)
-            v0 = rand(self.nv)*2-1
+            q0 = rand(self.nq)*(self.qup-self.qlow)+self.qlow
+            v0 = rand(self.nq)*(self.vup-self.vlow)+self.vlow
             x0 = np.vstack([q0,v0])
         assert len(x0)==self.nx
         self.x = x0.copy()
@@ -126,6 +130,8 @@ class Pendulum:
 
     def step(self,u):
         assert(len(u)==self.nu)
+        self.uprev = u.copy()
+        self.xprev = self.x.copy()
         _,self.r = self.dynamics(self.x,u)
         return self.obs(self.x),self.r
 
@@ -173,7 +179,7 @@ class Pendulum:
 
             if display:
                 self.display(q)
-                time.sleep(1e-4)
+                time.sleep(self.DT/20)
 
         x[:self.nq] = modulePi(q)
         x[self.nq:] = np.clip(v,-self.vmax,self.vmax)
@@ -181,8 +187,11 @@ class Pendulum:
         return x,-cost
      
     def render(self):
-        q = self.x[:self.nq]
-        self.display(q)
-        time.sleep(self.DT/10)
+        if "xprev" in self.__dict__ and "uprev" in self.__dict__:
+            self.dynamics(self.xprev.copy(),self.uprev.copy(),display=True):
+        else:
+            q = self.x[:self.nq]
+            self.display(q)
+            time.sleep(self.DT/10)
 
         

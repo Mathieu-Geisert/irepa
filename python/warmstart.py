@@ -33,7 +33,7 @@ UPDATE_RATE             = 0.01          # Homotopy rate to update the networks
 REPLAY_SIZE             = 10000         # Size of replay buffer
 BATCH_SIZE              = 64            # Number of points to be fed in stochastic gradient
 NH1 = NH2               = 250           # Hidden layer size
-RESTORE                 = ""#"netvalues/actorcritic.25.ckpt" # Previously optimize net weight 
+RESTORE                 = "netvalues/actorcritic.15.ckpt" # Previously optimize net weight 
                                         # (set empty string if no)
 ### --- Environment
 env                 = Pendulum(1)       # Continuous pendulum
@@ -45,7 +45,6 @@ env.DT              = .15
 env.NDT             = 2
 env.Kf              = 0.1
 NSTEPS              = 30
-#DECAY_RATE          = 1
 
 ### --- Q-value and policy networks
 
@@ -116,16 +115,6 @@ class PolicyNetwork:
                   for target,ref in zip(self.variables,nominalNet.variables) ]
         return self
 
-### --- Replay memory
-class ReplayItem:
-    def __init__(self,x,u,r,d,x2):
-        self.x          = x
-        self.u          = u
-        self.reward     = r
-        self.done       = d
-        self.x2         = x2
-
-replayDeque = deque()
 
 ### --- Tensor flow initialization
 
@@ -139,7 +128,6 @@ sess            = tf.InteractiveSession()
 tf.global_variables_initializer().run()
 
 if len(RESTORE)>0:
-    print "*** Restore net weights from ",RESTORE
     tf.train.Saver().restore(sess, RESTORE)
 
 def rendertrial(maxiter=NSTEPS,verbose=True):
@@ -154,104 +142,57 @@ def rendertrial(maxiter=NSTEPS,verbose=True):
     if verbose: print 'Lasted ',i,' timestep -- total reward:',rsum
 signal.signal(signal.SIGTSTP, lambda x,y:rendertrial()) # Roll-out when CTRL-Z is pressed
 
-### History of search
-h_rwd = []
-h_qva = []
-h_ste = []    
+x0 = np.matrix([3.0,0.0]).T
+env.reset(x0)
+env.NDT = 1
+env.modulo = False
 
-### --- Training
-for episode in range(1,NEPISODES):
-    x    = env.reset().T
-    rsum = 0.0
+hx = []
+hu = []
+for i in range(NSTEPS+1):
+    u = sess.run(policy.policy, feed_dict={ policy.x: env.obs(env.x).T })
+    hx.append(env.x.copy().T)
+    hx[-1][0,0] -= np.pi*2   # TMP: hack modulo
+    hu.append(u.copy())
+    env.step(u)
+#    env.render()
 
-    for step in range(NSTEPS):
-        u       = sess.run(policy.policy, feed_dict={ policy.x: x }) # Greedy policy ...
-        u      += 1. / (1. + episode + step)                         # ... with noise
-        x2,r    = env.step(u)
-        x2      = x2.T
-        done    = False                                              # pendulum scenario is endless.
 
-        replayDeque.append(ReplayItem(x,u,r,done,x2))                # Feed replay memory ...
-        if len(replayDeque)>REPLAY_SIZE: replayDeque.popleft()       # ... with FIFO forgetting.
+from acado_runner import AcadoRunner
+acado = AcadoRunner()
+acado.options['horizon']  = NSTEPS*env.DT
+acado.options['steps']    = NSTEPS
+acado.options['shift']    = 0
+acado.options['iter']     = 0
+acado.options['friction'] = env.Kf
+acado.options['decay'] = DECAY_RATE
+acado.additionalOptions = ' --plot '
 
-        rsum   += r
-        if done or np.linalg.norm(x-x2)<1e-3: break                  # Break when pendulum is still.
-        x       = x2
+#acado.run(x0[0,0],x0[1,0])
 
-        # Start optimizing networks when memory size > batch size.
-        if len(replayDeque) > BATCH_SIZE:     
-            batch = random.sample(replayDeque,BATCH_SIZE)            # Random batch from replay memory.
-            x_batch    = np.vstack([ b.x      for b in batch ])
-            u_batch    = np.vstack([ b.u      for b in batch ])
-            r_batch    = np.vstack([ b.reward for b in batch ])
-            d_batch    = np.vstack([ b.done   for b in batch ])
-            x2_batch   = np.vstack([ b.x2     for b in batch ])
+acado.options['icontrol']    = '/tmp/guess.ctl'
+acado.options['istate']      = '/tmp/guess.stx'
+fctl = open(acado.options['icontrol'],'w')
+fstx = open(acado.options['istate'],'w')
+for i in range(NSTEPS+1):
+    fstx.write( '%.10f \t%.20f \t%.20f \t0.00\n' % ( i*env.DT, hx[i][0,0], hx[i][0,1] )  )
+    fctl.write( '%.10f \t%.20f\n' % ( i*env.DT, hu[i][0,0] ) )
+fctl.close()
+fstx.close()
 
-            # Compute Q(x,u) from target network
-            u2_batch   = sess.run(policyTarget.policy, feed_dict={ policyTarget .x : x2_batch})
-            q2_batch   = sess.run(qvalueTarget.qvalue, feed_dict={ qvalueTarget.x : x2_batch,
-                                                                   qvalueTarget.u : u2_batch })
-            qref_batch = r_batch + (d_batch==False)*(DECAY_RATE*q2_batch)
+del acado.options['istate']
+acado.run(x0[0,0],x0[1,0])
+print acado.cmd
 
-            # Update qvalue to solve HJB constraint: q = r + q'
-            sess.run(qvalue.optim, feed_dict={ qvalue.x    : x_batch,
-                                               qvalue.u    : u_batch,
-                                               qvalue.qref : qref_batch })
 
-            # Compute approximate policy gradient ...
-            u_targ  = sess.run(policy.policy,   feed_dict={ policy.x        : x_batch} )
-            qgrad   = sess.run(qvalue.gradient, feed_dict={ qvalue.x        : x_batch,
-                                                            qvalue.u        : u_targ })
-            # ... and take an optimization step along this gradient.
-            sess.run(policy.optim,feed_dict= { policy.x         : x_batch,
-                                               policy.qgradient : qgrad })
-
-            # Update target networks by homotopy.
-            sess.run(policyTarget. update_variables)
-            sess.run(qvalueTarget.update_variables)
-
-    # \\\END_FOR step in range(NSTEPS)
-
-    # Display and logging (not mandatory).
-    maxq = np.max( sess.run(qvalue.qvalue,feed_dict={ qvalue.x : x_batch,
-                                                      qvalue.u : u_batch }) ) \
-                                                      if 'x_batch' in locals() else 0
-    print 'Ep#{:3d}: lasted {:d} steps, reward={:3.0f}, max qvalue={:2.3f}' \
-        .format(episode, step,rsum, maxq)
-    h_rwd.append(rsum)
-    h_qva.append(maxq)
-    h_ste.append(step)
-    if not (episode+1) % 20:     rendertrial(100)
-
-# \\\END_FOR episode in range(NEPISODES)
-
-if NEPISODES>0:
-    print "Average reward during trials: %.3f" % (sum(h_rwd)/(NEPISODES+1))
-    plt.plot( np.cumsum(h_rwd)/range(1,NEPISODES) )
-    plt.show()
-
-#rendertrial()
-
-from pinocchio.utils import rand
-
-print 'Generate sampling for plots'
-h = []
-for i in range(10000):
-    x = np.diag([2*np.pi,16])*rand(2)+np.matrix([-np.pi,-8]).T
-    y = env.reset(x)
-    u = sess.run(policy.policy, feed_dict={ policy.x: y.T })
-    c = sess.run(qvalue.qvalue, feed_dict={ qvalue.x: y.T, qvalue.u: u })
-    h.append( np.hstack([x.T,u,c]) )
-
-D = np.array(h)[:,0,:]
-
-import matplotlib.pyplot as plt
-import pylab
-from mpl_toolkits.mplot3d import Axes3D
-plt.ion()
-
-fig = pylab.figure()
-ax = Axes3D(fig)
-#ax.scatter(D[:,0],D[:,1],D[:,2])
-ax.scatter(D[:,0],D[:,1],-D[:,3])
-
+def policyOptim(x0):
+    env.reset(x0)
+    fctl = open(acado.options['icontrol'],'w')
+    for i in range(NSTEPS+1):
+        u = sess.run(policy.policy, feed_dict={ policy.x: env.obs(env.x).T })
+        env.step(u)
+        fctl.write( '%.10f \t%.20f\n' % ( i*env.DT, hu[i][0,0] ) )
+    fctl.close()
+    mod = round(env.x[0,0]/2/np.pi)
+    x0[0,0] -= mod*2*np.pi
+    acado.run(x0[0,0],x0[1,0])

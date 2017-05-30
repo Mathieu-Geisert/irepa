@@ -74,6 +74,8 @@ class Pendulum:
         self.vlow       = -self.vmax
         self.vup        = +self.vmax
 
+        self.modulo     = True
+
     def createPendulum(self,nbJoint,rootId=0,prefix='',jointPlacement=None):
         color   = [red,green,blue,transparency] = [1,1,0.78,1.0]
         colorred = [1.0,0.0,0.0,1.0]
@@ -155,7 +157,7 @@ class Pendulum:
         Return x for convenience along with the cost.
         '''
 
-        modulePi = lambda th: (th+np.pi)%(2*np.pi)-np.pi
+        modulePi = (lambda th: (th+np.pi)%(2*np.pi)-np.pi) if self.modulo else (lambda th: th)
         sumsq    = lambda x : np.sum(np.square(x))
 
         cost = 0.0
