@@ -61,10 +61,6 @@ class Pendulum:
         self.data       = self.model.createData()
 
         self.q0         = zero(self.model.nq)
-        self.qlow       = -5.
-        self.qup        = +5.
-        self.vlow       = -6
-        self.vup        = +6
 
         self.DT         = 5e-2   # Step length
         self.NDT        = 2      # Number of Euler steps per integration (internal)
@@ -72,6 +68,13 @@ class Pendulum:
         self.vmax       = 8.0    # Max velocity (clipped if larger)
         self.umax       = 2.0    # Max torque   (clipped if larger)
         self.withSinCos = False   # If true, state is [cos(q),sin(q),qdot], else [q,qdot]
+
+        self.qlow       = -5.
+        self.qup        = +5.
+        self.vlow       = -self.vmax
+        self.vup        = +self.vmax
+
+        self.modulo     = True
 
     def createPendulum(self,nbJoint,rootId=0,prefix='',jointPlacement=None):
         color   = [red,green,blue,transparency] = [1,1,0.78,1.0]
@@ -126,6 +129,8 @@ class Pendulum:
         assert len(x0)==self.nx
         self.x = x0.copy()
         self.r = 0.0
+        if 'xprev' in self.__dict__: del self.xprev
+        if 'uprev' in self.__dict__: del self.uprev
         return self.obs(self.x)
 
     def step(self,u):
@@ -137,8 +142,8 @@ class Pendulum:
 
     def obs(self,x):
         if self.withSinCos:
-            return np.vstack([ np.vstack([np.cos(qi),np.sin(qi)]) for qi in x[:self.nq] ] 
-                             + [x[self.nq:]],)
+            return np.vstack([ np.vstack([np.cos(qi),np.sin(qi)]) for qi in x[:self.nq,:] ] 
+                             + [x[self.nq:,:]],)
         else: return x.copy()
 
     def tip(self,q):
@@ -154,8 +159,7 @@ class Pendulum:
         Return x for convenience along with the cost.
         '''
 
-        #modulePi = lambda th: (th+np.pi)%(2*np.pi)-np.pi
-        modulePi = lambda th: th
+        modulePi = (lambda th: (th+np.pi)%(2*np.pi)-np.pi) if self.modulo else (lambda th: th)
         sumsq    = lambda x : np.sum(np.square(x))
 
         cost = 0.0
@@ -188,7 +192,7 @@ class Pendulum:
      
     def render(self):
         if "xprev" in self.__dict__ and "uprev" in self.__dict__:
-            self.dynamics(self.xprev.copy(),self.uprev.copy(),display=True):
+            self.dynamics(self.xprev.copy(),self.uprev.copy(),display=True)
         else:
             q = self.x[:self.nq]
             self.display(q)

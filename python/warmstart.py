@@ -3,7 +3,7 @@ Deep actor-critic network,
 From "Continuous control with deep reinforcement learning", by Lillicrap et al, arXiv:1509.02971
 '''
 
-from pend import Pendulum
+from pendulum import Pendulum
 import tensorflow as tf
 import numpy as np
 import tflearn
@@ -33,7 +33,7 @@ UPDATE_RATE             = 0.01          # Homotopy rate to update the networks
 REPLAY_SIZE             = 10000         # Size of replay buffer
 BATCH_SIZE              = 64            # Number of points to be fed in stochastic gradient
 NH1 = NH2               = 250           # Hidden layer size
-RESTORE                 = "netvalues/actorcritic.15.ckpt" # Previously optimize net weight 
+RESTORE                 = "netvalues/actorcritic.15.kf2" # Previously optimize net weight 
                                         # (set empty string if no)
 ### --- Environment
 env                 = Pendulum(1)       # Continuous pendulum
@@ -41,9 +41,10 @@ env.withSinCos      = True              # State is dim-3: (cosq,sinq,qdot) ...
 NX                  = env.nobs          # ... training converges with q,qdot with 2x more neurones.
 NU                  = env.nu            # Control is dim-1: joint torque
 
+env.vmax            = 100.
 env.DT              = .15
 env.NDT             = 2
-env.Kf              = 0.1
+env.Kf              = 0.2
 NSTEPS              = 30
 
 ### --- Q-value and policy networks
@@ -130,8 +131,8 @@ tf.global_variables_initializer().run()
 if len(RESTORE)>0:
     tf.train.Saver().restore(sess, RESTORE)
 
-def rendertrial(maxiter=NSTEPS,verbose=True):
-    x = env.reset()
+def rendertrial(x0=None,maxiter=NSTEPS,verbose=True):
+    x = env.reset(x0)
     rsum = 0.
     for i in range(maxiter):
         u = sess.run(policy.policy, feed_dict={ policy.x: x.T })
@@ -142,57 +143,100 @@ def rendertrial(maxiter=NSTEPS,verbose=True):
     if verbose: print 'Lasted ',i,' timestep -- total reward:',rsum
 signal.signal(signal.SIGTSTP, lambda x,y:rendertrial()) # Roll-out when CTRL-Z is pressed
 
-x0 = np.matrix([3.0,0.0]).T
-env.reset(x0)
 env.NDT = 1
 env.modulo = False
-
-hx = []
-hu = []
-for i in range(NSTEPS+1):
-    u = sess.run(policy.policy, feed_dict={ policy.x: env.obs(env.x).T })
-    hx.append(env.x.copy().T)
-    hx[-1][0,0] -= np.pi*2   # TMP: hack modulo
-    hu.append(u.copy())
-    env.step(u)
-#    env.render()
-
 
 from acado_runner import AcadoRunner
 acado = AcadoRunner()
 acado.options['horizon']  = NSTEPS*env.DT
 acado.options['steps']    = NSTEPS
 acado.options['shift']    = 0
-acado.options['iter']     = 0
+acado.options['iter']     = 20
 acado.options['friction'] = env.Kf
 acado.options['decay'] = DECAY_RATE
-acado.additionalOptions = ' --plot '
-
-#acado.run(x0[0,0],x0[1,0])
-
 acado.options['icontrol']    = '/tmp/guess.ctl'
-acado.options['istate']      = '/tmp/guess.stx'
-fctl = open(acado.options['icontrol'],'w')
-fstx = open(acado.options['istate'],'w')
-for i in range(NSTEPS+1):
-    fstx.write( '%.10f \t%.20f \t%.20f \t0.00\n' % ( i*env.DT, hx[i][0,0], hx[i][0,1] )  )
-    fctl.write( '%.10f \t%.20f\n' % ( i*env.DT, hu[i][0,0] ) )
-fctl.close()
-fstx.close()
-
 del acado.options['istate']
-acado.run(x0[0,0],x0[1,0])
-print acado.cmd
-
 
 def policyOptim(x0):
+    '''
+    Rollout the net to get a warmstart, then run Acado to optimize the warmstart
+    Return the policy and the value at input state.
+    '''
     env.reset(x0)
     fctl = open(acado.options['icontrol'],'w')
     for i in range(NSTEPS+1):
         u = sess.run(policy.policy, feed_dict={ policy.x: env.obs(env.x).T })
         env.step(u)
-        fctl.write( '%.10f \t%.20f\n' % ( i*env.DT, hu[i][0,0] ) )
+        fctl.write( '%.10f \t%.20f\n' % ( i*env.DT, u[0,0] ) )
     fctl.close()
     mod = round(env.x[0,0]/2/np.pi)
     x0[0,0] -= mod*2*np.pi
-    acado.run(x0[0,0],x0[1,0])
+    return acado.run(x0[0,0],x0[1,0])
+
+#x0 = np.matrix([3.0,0.0]).T
+#acado.options['iter']     = 0
+#acado.additionalOptions = ' --plot '
+#policyOptim(x0)
+
+def explore(NROLLOUTS=1000):
+    '''
+    Run NROLLOUTS computations of the optimal policy (obtained from net
+    warmstart and acado optim), save the dataset in databasexx_DATA.np and
+    returns it.
+    '''
+    database = []
+    for rollout in range(NROLLOUTS):
+        if not rollout % 100: print "=== Rollout #",rollout
+        env.reset()
+        x = env.x.copy()
+        u,cost = policyOptim(env.x)
+        database.append( [ x[0,0], x[1,0], u[0], cost ] )
+    
+    D=np.array(database)
+    import datetime
+    filename = 'databasexx_'+datetime.datetime.now().strftime('%Y%m%d_%H%M%S')+'.np'
+    np.save(open(filename,'w'),D)
+
+    return D
+
+#acado.additionalOptions = ' --plot '
+def rollout(x0 = None, interactive = False):
+    '''Execute one optimal runout using the optimized policy (net+acado) from random init point.'''
+    env.reset(x0)
+    print env.x.T
+    for i in range(NSTEPS):
+        x = env.x.copy()
+        u,_ = policyOptim(x)
+        env.reset(x)
+        env.step(np.matrix(u))
+        env.render()
+        if interactive: 
+            print acado.cmd
+            raw_input("Press Enter to continue...")
+
+
+acadompc = AcadoRunner()
+acadompc.options['horizon']  = NSTEPS*env.DT
+acadompc.options['steps']    = NSTEPS
+acadompc.options['friction'] = env.Kf
+acadompc.options['decay'] = DECAY_RATE
+del acadompc.options['istate']
+
+def rolloutmpc(x0 = None, interactive = False):
+    env.reset(x0)
+    print env.x.T
+    u,_ = policyOptim(env.x)  # init guess
+    env.step(np.matrix(u))
+    env.render()
+    print acado.cmd
+    raw_input("Press Enter to continue...")
+    for i in range(NSTEPS):
+        u,cost = acadompc.run(env.x[0,0],env.x[1,0])
+        env.step(np.matrix(u))
+        env.render()
+        if interactive: 
+            print acadompc.cmd
+            raw_input("Press Enter to continue...")
+
+
+

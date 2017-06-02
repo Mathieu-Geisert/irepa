@@ -123,8 +123,8 @@ class Pendulum:
 
     def reset(self,x0=None):
         if x0 is None: 
-            q0 = np.pi*(rand(self.nq)*2-1)
-            v0 = rand(self.nv)*2-1
+            q0 = rand(self.nq)*(self.qup-self.qlow)+self.qlow
+            v0 = rand(self.nq)*(self.vup-self.vlow)+self.vlow
             x0 = np.vstack([q0,v0])
         assert len(x0)==self.nx
         self.x = x0.copy()

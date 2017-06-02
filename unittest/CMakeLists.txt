@@ -54,4 +54,6 @@ ENDMACRO(ADD_UNIT_TEST)
 ADD_CUSTOM_TARGET(check COMMAND ${CMAKE_CTEST_COMMAND})
 
 ADD_UNIT_TEST(pendulum eigen3)
+ADD_UNIT_TEST(discrete_pendulum eigen3)
+ADD_UNIT_TEST(minitime eigen3)
 ADD_UNIT_TEST(pendulum2o eigen3)

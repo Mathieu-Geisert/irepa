@@ -3,7 +3,7 @@ Deep actor-critic network,
 From "Continuous control with deep reinforcement learning", by Lillicrap et al, arXiv:1509.02971
 '''
 
-from pend import Pendulum
+from pendulum import Pendulum
 import tensorflow as tf
 import numpy as np
 import tflearn
@@ -24,7 +24,7 @@ u_init              = tflearn.initializations.uniform(minval=-0.003, maxval=0.00
                                                       seed=RANDOM_SEED)
 
 ### --- Hyper paramaters
-NEPISODES               = 500           # Max training steps
+NEPISODES               = 5000           # Max training steps
 NSTEPS                  = 100           # Max episode length
 QVALUE_LEARNING_RATE    = 0.001         # Base learning rate for the Q-value Network
 POLICY_LEARNING_RATE    = 0.0001        # Base learning rate for the policy network
@@ -35,6 +35,10 @@ BATCH_SIZE              = 64            # Number of points to be fed in stochast
 NH1 = NH2               = 250           # Hidden layer size
 RESTORE                 = ""#"netvalues/actorcritic.25.ckpt" # Previously optimize net weight 
                                         # (set empty string if no)
+RENDERRATE              = 100           # Render rate (rollout and plot) during training (0 = no)
+REGULAR                 = True          # Render on a regular grid vs random grid
+
+
 ### --- Environment
 env                 = Pendulum(1)       # Continuous pendulum
 env.withSinCos      = True              # State is dim-3: (cosq,sinq,qdot) ...
@@ -46,6 +50,12 @@ env.NDT             = 2
 env.Kf              = 0.1
 NSTEPS              = 30
 #DECAY_RATE          = 1
+
+env.Kf = 0.2
+env.vmax = 100
+#RESTORE                 = "netvalues/actorcritic.15.kf2" # Previously optimize net weight 
+RESTORE                 = "netvalues/actorcritic.15.kf2.25000" # Previously optimize net weight 
+
 
 ### --- Q-value and policy networks
 
@@ -159,6 +169,13 @@ h_rwd = []
 h_qva = []
 h_ste = []    
 
+# Mesh grid for rendering the policy and value functions.
+if REGULAR:  # Regular sampling
+    X = np.vstack([ x.ravel() for x in np.meshgrid(np.arange(env.qlow,env.qup,.3),
+                                                   np.arange(env.vlow,env.vup,.3)) ]).T
+else: # Random sampling
+    X=np.vstack([ np.diag([2*np.pi,16])*rand(2)+np.matrix([-np.pi,-8]) for i in range(1000) ])
+
 ### --- Training
 for episode in range(1,NEPISODES):
     x    = env.reset().T
@@ -221,7 +238,22 @@ for episode in range(1,NEPISODES):
     h_rwd.append(rsum)
     h_qva.append(maxq)
     h_ste.append(step)
-    if not (episode+1) % 20:     rendertrial(100)
+    if not (episode+1) % renderrate:     
+        # Rollout and render in Gepetto
+        rendertrial(100)
+        # Generate sampling of the policy/value functions
+        U = sess.run(policy.policy, feed_dict={ policy.x: env.obs(X.T).T })
+        Q = sess.run(qvalue.qvalue, feed_dict={ qvalue.x: env.obs(X.T).T,
+                                                qvalue.u: U })
+        # Scatter plot of policy/value funciton sampling (in file)
+        plt.clf()
+        plt.subplot(1,2,1)
+        plt.scatter(X[:,0],X[:,1],c=U[:],s=50,linewidths=0,alpha=.8,vmin=-2,vmax=2)
+        plt.colorbar()
+        plt.subplot(1,2,2)
+        plt.scatter(X[:,0],X[:,1],c=Q[:],s=50,linewidths=0,alpha=.8)
+        plt.colorbar()
+        plt.savefig('figs/actorcritic_%d.png' % episode)
 
 # \\\END_FOR episode in range(NEPISODES)
 
@@ -231,27 +263,4 @@ if NEPISODES>0:
     plt.show()
 
 #rendertrial()
-
-from pinocchio.utils import rand
-
-print 'Generate sampling for plots'
-h = []
-for i in range(10000):
-    x = np.diag([2*np.pi,16])*rand(2)+np.matrix([-np.pi,-8]).T
-    y = env.reset(x)
-    u = sess.run(policy.policy, feed_dict={ policy.x: y.T })
-    c = sess.run(qvalue.qvalue, feed_dict={ qvalue.x: y.T, qvalue.u: u })
-    h.append( np.hstack([x.T,u,c]) )
-
-D = np.array(h)[:,0,:]
-
-import matplotlib.pyplot as plt
-import pylab
-from mpl_toolkits.mplot3d import Axes3D
-plt.ion()
-
-fig = pylab.figure()
-ax = Axes3D(fig)
-#ax.scatter(D[:,0],D[:,1],D[:,2])
-ax.scatter(D[:,0],D[:,1],-D[:,3])
 
