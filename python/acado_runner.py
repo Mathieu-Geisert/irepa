@@ -7,6 +7,7 @@ DT       = 0.25
 NHORIZON = int(HORIZON/DT)
 
 f2a = lambda filename: [ [float(s) for s in l.split() ] for l in open(filename).readlines()]
+flatten = lambda matrx: np.array([matrx]).squeeze().tolist()
 
 class AcadoRunner:
     def __init__(self,path= "/home/nmansard/src/pinocchio/pycado/build/unittest/discrete_pendulum"):
@@ -32,7 +33,9 @@ class AcadoRunner:
         self.cmd = self.exe + ' ' \
             + ' '.join([ '--%s=%s' % (k,str(v)) for k,v in opts.items() ]) \
             + self.additionalOptions \
-            + ' -p %.20f -v %.20f > /dev/null' % ( pos,vel )
+            + ' --initpos=' + ' '.join([ '%.20f'%f for f in flatten(pos)]) \
+            + ' --initvel=' + ' '.join([ '%.20f'%f for f in flatten(vel)]) \
+            + ' > /dev/null'
         os.system(self.cmd)
         ctls = f2a(self.controlFile)
         stts = f2a(self.stateFile)

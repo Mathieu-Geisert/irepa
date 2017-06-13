@@ -1,4 +1,4 @@
-from sympy import symbols,cos,sin
+from sympy import symbols,cos,sin,fraction
 from sympy.interactive.printing import init_printing
 init_printing(use_unicode=False, wrap_line=False, no_global=True)
 import sympy.matrices as sm
@@ -8,11 +8,10 @@ from sympy.physics.mechanics import ReferenceFrame, Vector
 import numpy as np
 import pinocchio.utils as ut
 
-p,m,g = symbols('p m g')
 
 class SE3:
     def __init__(self,R=None,p=None):
-        self.R = R if R is not None else Matrix([[ 1.,0.,0. ],[ 0.,1.,0. ],[ 0.,0.,1. ]])
+        self.R = R if R is not None else Matrix([[ 1,0.,0. ],[ 0.,1,0. ],[ 0.,0.,1 ]])
         self.p = p if p is not None else Matrix([ 0.,0.,0. ])
     def mult_se3(self,M):
         return SE3(self.R*M.R,self.p+self.R*M.p)
@@ -143,32 +142,38 @@ class Joint:
         self.Si = Motion(w=Matrix([0,1  ,0]))
 
 
-Ycst = Inertia(mass=m,lever=Matrix([ 0.,0.,p/2 ]) ) 
-JOINTS = [ 
-    Joint(0), ### Universe
-    Joint(parent=0,Mfix=SE3(),                        inertia = Ycst),
-    Joint(parent=1,Mfix=SE3( p=Matrix([ 0.,0.,p ]) ), inertia = Ycst)
-    ]
+class SymModel:
+    def __init__(self):
+        self.joints = [ Joint(0), ] ### Universe
 
-q = [ symbols("q%d"%j)  for j,_ in enumerate(JOINTS[1:]) ]
-vq = [ symbols("dq%d"%j) for j,_ in enumerate(JOINTS[1:]) ]
+    def addJoint(self,parent,jointPlacement,inertia):
+        '''Only RY joints are accepted. Remember to call initData after all joints have
+        been added.'''
+        j = len(self.joints)
+        self.joints.append( Joint(parent,jointPlacement,inertia) )
 
-class RNEA:
-    def __init__(self,kinetree):
-        self.joints = kinetree
-        self.njoints= len(kinetree)
+    def initData(self):
+        '''Init the data structure once all joints have been added. The method
+        should be called after any new call to addJoint.'''
         self.oMi    = [ SE3() for j in self.joints ]
         self.liMi   = [ SE3() for j in self.joints ]
         self.v      = [ Motion() for j in self.joints ]
         self.a      = [ Motion() for j in self.joints ]
         self.f      = [ Force() for j in self.joints ]
         self.Ycrb   = [ Inertia() for j in self.joints ]
-        self.tauq   = [ 0       for j in self.joints[1:] ]
-        self.M      = Matrix([ [0,]*(self.njoints-1), ]*(self.njoints-1))
+        self.tauq   = Matrix([ 0       for j in self.joints[1:] ])
+        self.q      = [ symbols("q%d" %(j)) for j,_ in enumerate(self.joints[1:]) ]
+        self.vq     = [ symbols("vq%d"%(j)) for j,_ in enumerate(self.joints[1:]) ]
+        self.g      = symbols('g')
 
-        self.a[0]   = Motion(v=Matrix([0,0,g]))
+        self.a[0]   = Motion(v=Matrix([0,0,self.g]))  # Init acceleration to gravity free fall
 
-    def fkine(self,q,vq):
+    def forwardKine(self,q,vq):
+        '''
+        Compute foward geometry (oMi, liMi), fwd kinematics (vq), centrifugal and gravity acc
+        aq, initialize Ycrb and f.
+        '''
+        assert( len(self.joints)==len(self.v) )
         for j,joint in enumerate(self.joints):
             if j==0: continue
             joint.calc(q[j-1],vq[j-1])
@@ -186,39 +191,81 @@ class RNEA:
 
             self.Ycrb[j] = joint.Y.copy()
 
-    def back(self):
+    def rnea(self,q=None,vq=None,redoFwdKine=True): # Compute b(q,vq), i.e rnea(q,vq,aq=0)
+        if q is None: q = self.q
+        if vq is None: vq = self.vq
+        if redoFwdKine: self.forwardKine(q,vq) # Forward loop
         for j,joint in reversed(list(enumerate(self.joints))):
+            # Backward loop
             if j==0: continue
-            print j
             self.tauq[j-1]  = joint.Si.T*self.f[j]
             self.f[j-1]    += self.liMi[j] * self.f[j]
-
-    def __call__(self,q,vq):
-        self.fkine(q,vq)
-        self.back()
         return self.tauq
 
-    def crba(self):
-        # Backward loop of crba
+    def crba(self,q=None,redoFwdKine=True):
+        if q is None: q = self.q
+        if redoFwdKine: self.forwardKine(q,self.vq) # Forward loop
+        self.M      = Matrix([ [0,]*(len(self.joints)-1), ]*(len(self.joints)-1))
         for j,joint in reversed(list(enumerate(self.joints))):
+        # Backward loop of crba
             if j==0: continue
             self.Ycrb[j-1] = self.Ycrb[j-1] + self.liMi[j]*self.Ycrb[j]
             YS = self.oMi[j]*(self.Ycrb[j]*joint.Si)
             for jj in range(j,0,-1):
-                print "jj = ",jj
                 Sjj = self.oMi[jj]*self.joints[jj].Si
                 self.M[jj-1,j-1] = Sjj.T*YS
                 if jj is not j: self.M[j-1,jj-1] = Sjj.T*YS
-
-rnea = RNEA(JOINTS)
-rnea(q,vq)
-rnea.crba()
+        return self.M
 
 
-def values(valq,valv):
-    return { m:1,p:.1,g:9.81,
-             vq[0]:valv[0,0] ,vq[1]:valv[1,0],
-             q[0] :valq[0,0] ,q[1] :valq[1,0]
-             }
+if __name__ == '__main__':
+    # Create double pendulum with p length and m mass, and compare it with pinocchio values.
+    p,m,c = symbols('p m c')
+    Ycst = Inertia(mass=m,lever=Matrix([ 0.,0.,c ]) ) 
+    model = SymModel()
+    model.addJoint(parent=0,jointPlacement=SE3(),                        inertia = Ycst),
+    model.addJoint(parent=1,jointPlacement=SE3( p=Matrix([ 0.,0.,p ]) ), inertia = Ycst)
+    model.initData()
+
+    b = model.rnea()
+    b.simplify()
+    M = model.crba(redoFwdKine=False)
+    M.simplify()
+    a = symbols('a')
+    A = eye(2)*a
+
+    def values(valq,valv):
+        '''
+        Generate a symbol table for a specific set of numerical values.
+        '''
+        return { m:1,p:.1,c:.05,model.g:9.81,
+                 model.vq[0]:valv[0,0] ,model.vq[1]:valv[1,0],
+                 model.q[0] :valq[0,0] ,model.q[1] :valq[1,0]
+                 }
 
 
+    import pinocchio as se3
+    from pinocchio.utils import *
+    from pendulum import Pendulum
+    env                 = Pendulum(2,length=.1)       # Continuous pendulum
+
+    print 'Statistic assert of model correctness....'
+    for i in range(100):
+        q  = rand(2)
+        vq = rand(2)
+        bv=se3.rnea(env.model,env.data,q,vq,zero(2))
+        Mv=se3.crba(env.model,env.data,q)
+        assert( (b.subs(values(q,vq))-bv).norm()<1e-6 )
+        assert( (M.subs(values(q,vq))-Mv).norm()<1e-6 )
+    print '\t\t\t\t\t... ok'
+
+    b = b.subs({c:p/2})
+    b.simplify()
+
+    Mi = (M+A).inv()
+    Mi = Mi.subs({c:p/2})
+    Mi.simplify()
+    _,denom= fraction(Mi[0,0])
+    denom.simplify()
+    Mi = denom*Mi
+    Mi.simplify()

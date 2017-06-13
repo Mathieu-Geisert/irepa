@@ -52,11 +52,18 @@ class Pendulum:
     See tp1.py for an example of use.
     '''
 
-    def __init__(self,nbJoint=1):
-        '''Create a Pinocchio model of a N-pendulum, with N the argument <nbJoint>.'''
+    def __init__(self,nbJoint=1,length=1.,mass=1.,armature=None):
+        '''
+        Create a Pinocchio model of a N-pendulum, with N the argument <nbJoint>.
+        <length> and <mass> should be double values.
+        <armature> should be none, a double or a flat vector 1xNV containing joint armatures.
+        '''
         self.viewer     = Display()
         self.visuals    = []
         self.model      = se3.Model.BuildEmptyModel()
+        self.length     = length
+        self.mass       = mass
+        self.armature   = armature
         self.createPendulum(nbJoint)
         self.data       = self.model.createData()
 
@@ -82,11 +89,14 @@ class Pendulum:
 
         jointId = rootId
         jointPlacement     = jointPlacement if jointPlacement!=None else se3.SE3.Identity()
-        length = 1.0
-        mass = length
+        length = self.length
+        mass = self.mass
+        # inertia = se3.Inertia(mass,
+        #                       np.matrix([0.0,0.0,length/2]).T,
+        #                       mass/5*np.diagflat([ 1e-2,length**2,  1e-2 ]) )
         inertia = se3.Inertia(mass,
                               np.matrix([0.0,0.0,length/2]).T,
-                              mass/5*np.diagflat([ 1e-2,length**2,  1e-2 ]) )
+                              0*mass/5*np.diagflat([ 1e-2,length**2,  1e-2 ]) )
 
         for i in range(nbJoint):
             istr = str(i)
@@ -94,9 +104,9 @@ class Pendulum:
             jointName,bodyName = [name+"_joint",name+"_body"]
             jointId = self.model.addJoint(jointId,se3.JointModelRY(),jointPlacement,jointName)
             self.model.appendBodyToJoint(jointId,inertia,se3.SE3.Identity())
-            self.viewer.viewer.gui.addSphere('world/'+prefix+'sphere'+istr, 0.15,colorred)
+            self.viewer.viewer.gui.addSphere('world/'+prefix+'sphere'+istr, length*0.15,colorred)
             self.visuals.append( Visual('world/'+prefix+'sphere'+istr,jointId,se3.SE3.Identity()) )
-            self.viewer.viewer.gui.addCapsule('world/'+prefix+'arm'+istr, .1,.8*length,color)
+            self.viewer.viewer.gui.addCapsule('world/'+prefix+'arm'+istr, length*.1,.8*length,color)
             self.visuals.append( Visual('world/'+prefix+'arm'+istr,jointId,
                                         se3.SE3(eye(3),np.matrix([0.,0.,length/2]))))
             jointPlacement     = se3.SE3(eye(3),np.matrix([0.0,0.0,length]).T)
@@ -170,14 +180,19 @@ class Pendulum:
 
         DT = self.DT/self.NDT
         for i in range(self.NDT):
-            #se3.computeAllTerms(self.model,self.data,q,v)
-            #M   = self.data.M
-            #b   = self.data.nle
-            tau = u-self.Kf*v
-            #a   = inv(M)*(tau-b)
-            a = se3.aba(self.model,self.data,q,v,tau)
 
-            v    += a*DT
+            tau = u-self.Kf*v
+
+            if self.armature is None:
+                a = se3.aba(self.model,self.data,q,v,tau)
+            else:
+                se3.computeAllTerms(self.model,self.data,q,v)
+                M   = self.data.M 
+                M.flat[::self.nv+1] += self.armature
+                b   = self.data.nle
+                a   = inv(M)*(tau-b)
+
+            v    += a*DT  # TODO
             q    += v*DT
             cost += (sumsq(q) + 1e-1*sumsq(v) + 1e-3*sumsq(u))*DT
 
@@ -187,7 +202,7 @@ class Pendulum:
 
         x[:self.nq] = modulePi(q)
         x[self.nq:] = np.clip(v,-self.vmax,self.vmax)
-        
+
         return x,-cost
      
     def render(self):
