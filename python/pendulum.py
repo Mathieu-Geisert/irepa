@@ -127,7 +127,7 @@ class Pendulum:
     @property
     def nx(self): return self.nq+self.nv
     @property
-    def nobs(self): return self.nx+self.withSinCos
+    def nobs(self): return self.nq*(2 if self.withSinCos else 1) + self.nv
     @property
     def nu(self): return self.nv
 

@@ -22,10 +22,9 @@ random.seed         (RANDOM_SEED)
 n_init              = tflearn.initializations.truncated_normal(seed=RANDOM_SEED)
 u_init              = tflearn.initializations.uniform(minval=-0.003, maxval=0.003,\
                                                       seed=RANDOM_SEED)
-
 ### --- Hyper paramaters
-NEPISODES               = 5000           # Max training steps
-NSTEPS                  = 100           # Max episode length
+NEPISODES               = 500000          # Max training steps
+NSTEPS                  = 30            # Max episode length
 QVALUE_LEARNING_RATE    = 0.001         # Base learning rate for the Q-value Network
 POLICY_LEARNING_RATE    = 0.0001        # Base learning rate for the policy network
 DECAY_RATE              = 0.99          # Discount factor 
@@ -33,13 +32,14 @@ UPDATE_RATE             = 0.01          # Homotopy rate to update the networks
 REPLAY_SIZE             = 10000         # Size of replay buffer
 BATCH_SIZE              = 64            # Number of points to be fed in stochastic gradient
 NH1 = NH2               = 250           # Hidden layer size
-RESTORE                 = ""#"netvalues/actorcritic.25.ckpt" # Previously optimize net weight 
+RESTORE                 = ""#"netvalues/actorcritic.15.kf2" # Previously optimize net weight 
                                         # (set empty string if no)
-RENDERRATE              = 100           # Render rate (rollout and plot) during training (0 = no)
+RENDERRATE              = 3000           # Render rate (rollout and plot) during training (0 = no)
+RENDERACTION            = [ 'saveweights', ] # 'draw', 'rollout'
 REGULAR                 = True          # Render on a regular grid vs random grid
 
-
 ### --- Environment
+'''
 env                 = Pendulum(1)       # Continuous pendulum
 env.withSinCos      = True              # State is dim-3: (cosq,sinq,qdot) ...
 NX                  = env.nobs          # ... training converges with q,qdot with 2x more neurones.
@@ -47,15 +47,24 @@ NU                  = env.nu            # Control is dim-1: joint torque
 
 env.DT              = .15
 env.NDT             = 2
-env.Kf              = 0.1
-NSTEPS              = 30
-#DECAY_RATE          = 1
+env.Kf              = 0.2
+env.vmax            = 100
+'''
 
-env.Kf = 0.2
-env.vmax = 100
-#RESTORE                 = "netvalues/actorcritic.15.kf2" # Previously optimize net weight 
-RESTORE                 = "netvalues/actorcritic.15.kf2.25000" # Previously optimize net weight 
+env = Pendulum(2,length=.5,mass=3.0,armature=10.)
+env.withSinCos      = True              # State is dim-3: (cosq,sinq,qdot) ...
+NX                  = env.nobs          # ... training converges with q,qdot with 2x more neurones.
+NU                  = env.nu            # Control is dim-1: joint torque
 
+env.DT              = 0.2
+env.NDT             = 1
+env.Kf              = 10.0 # 1.0
+env.vmax            = 100
+env.umax            = 15.
+env.modulo          = True
+NSTEPS              = 50
+BATCH_SIZE          = 128
+RESTORE = 'netvalues/double/actorcritic_double.59999'
 
 ### --- Q-value and policy networks
 
@@ -157,7 +166,7 @@ def rendertrial(maxiter=NSTEPS,verbose=True):
     rsum = 0.
     for i in range(maxiter):
         u = sess.run(policy.policy, feed_dict={ policy.x: x.T })
-        x, reward = env.step(u)
+        x, reward = env.step(u.T)
         env.render()
         time.sleep(1e-2)
         rsum += reward
@@ -174,6 +183,7 @@ if REGULAR:  # Regular sampling
     X = np.vstack([ x.ravel() for x in np.meshgrid(np.arange(env.qlow,env.qup,.3),
                                                    np.arange(env.vlow,env.vup,.3)) ]).T
 else: # Random sampling
+    from pinocchio.utils import rand
     X=np.vstack([ np.diag([2*np.pi,16])*rand(2)+np.matrix([-np.pi,-8]) for i in range(1000) ])
 
 ### --- Training
@@ -184,7 +194,7 @@ for episode in range(1,NEPISODES):
     for step in range(NSTEPS):
         u       = sess.run(policy.policy, feed_dict={ policy.x: x }) # Greedy policy ...
         u      += 1. / (1. + episode + step)                         # ... with noise
-        x2,r    = env.step(u)
+        x2,r    = env.step(u.T)
         x2      = x2.T
         done    = False                                              # pendulum scenario is endless.
 
@@ -238,22 +248,29 @@ for episode in range(1,NEPISODES):
     h_rwd.append(rsum)
     h_qva.append(maxq)
     h_ste.append(step)
-    if not (episode+1) % renderrate:     
-        # Rollout and render in Gepetto
-        rendertrial(100)
-        # Generate sampling of the policy/value functions
-        U = sess.run(policy.policy, feed_dict={ policy.x: env.obs(X.T).T })
-        Q = sess.run(qvalue.qvalue, feed_dict={ qvalue.x: env.obs(X.T).T,
-                                                qvalue.u: U })
-        # Scatter plot of policy/value funciton sampling (in file)
-        plt.clf()
-        plt.subplot(1,2,1)
-        plt.scatter(X[:,0],X[:,1],c=U[:],s=50,linewidths=0,alpha=.8,vmin=-2,vmax=2)
-        plt.colorbar()
-        plt.subplot(1,2,2)
-        plt.scatter(X[:,0],X[:,1],c=Q[:],s=50,linewidths=0,alpha=.8)
-        plt.colorbar()
-        plt.savefig('figs/actorcritic_%d.png' % episode)
+    if RENDERRATE and not (episode+1) % RENDERRATE:     
+        if 'saveweights' in RENDERACTION:
+            tf.train.Saver().save(sess,'netvalues/double/actorcritic_double.%04d' % episode)
+
+        if 'rollout' in RENDERACTION:
+            # Rollout and render in Gepetto
+            rendertrial(100)
+
+        if 'draw' in RENDERACTION:
+            # Generate sampling of the policy/value functions
+
+            U = sess.run(policy.policy, feed_dict={ policy.x: env.obs(X.T).T })
+            Q = sess.run(qvalue.qvalue, feed_dict={ qvalue.x: env.obs(X.T).T,
+                                                    qvalue.u: U })
+            # Scatter plot of policy/value funciton sampling (in file)
+            plt.clf()
+            plt.subplot(1,2,1)
+            plt.scatter(X[:,0],X[:,1],c=U[:],s=50,linewidths=0,alpha=.8,vmin=-2,vmax=2)
+            plt.colorbar()
+            plt.subplot(1,2,2)
+            plt.scatter(X[:,0],X[:,1],c=Q[:],s=50,linewidths=0,alpha=.8)
+            plt.colorbar()
+            plt.savefig('figs/actorcritic_%04d.png' % episode)
 
 # \\\END_FOR episode in range(NEPISODES)
 

@@ -6,3 +6,11 @@
 3. Train the policy net from the dataset with policy.py. Set "RESTORE=''" to prevent loading previously optimized weights. The net was trained for 1e6 sessions, which might be excessive. At the end of the training, the net is able to control the pendulum to desired position.
 
 4. TODO: use the policy net to warm start the acado search. We might expect that few iterations are now necessary to get the true optimum (compared to warmstarting with the AC net).
+
+
+-----
+
+DOUBLE Pendulum
+
+actor-critic has been modified. It produces weights in netvalues/double. These weights can be red using plot_double.py. However, the system fail to converge (even if reasonable trajectories can be obtained from the neural net).
+
