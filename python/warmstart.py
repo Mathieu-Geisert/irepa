@@ -1,6 +1,7 @@
 '''
-Deep actor-critic network, 
-From "Continuous control with deep reinforcement learning", by Lillicrap et al, arXiv:1509.02971
+From a trained actor-critic network (whose weights are loaded first), rollout
+some trajectories that are then optimized by acado. The results is stored in a
+np database.
 '''
 
 from pendulum import Pendulum
@@ -171,7 +172,7 @@ def policyOptim(x0):
     fctl.close()
     mod = round(env.x[0,0]/2/np.pi)
     x0[0,0] -= mod*2*np.pi
-    return acado.run(x0[0,0],x0[1,0])
+    return acado.run(x0[:1],x0[1:])
 
 #x0 = np.matrix([3.0,0.0]).T
 #acado.options['iter']     = 0
