@@ -23,7 +23,7 @@ n_init              = tflearn.initializations.truncated_normal(seed=RANDOM_SEED)
 u_init              = tflearn.initializations.uniform(minval=-0.003, maxval=0.003,\
                                                       seed=RANDOM_SEED)
 ### --- Hyper paramaters
-NEPISODES               = 500000          # Max training steps
+NEPISODES               = 5000          # Max training steps
 NSTEPS                  = 30            # Max episode length
 QVALUE_LEARNING_RATE    = 0.001         # Base learning rate for the Q-value Network
 POLICY_LEARNING_RATE    = 0.0001        # Base learning rate for the policy network
@@ -34,21 +34,23 @@ BATCH_SIZE              = 64            # Number of points to be fed in stochast
 NH1 = NH2               = 250           # Hidden layer size
 RESTORE                 = ""#"netvalues/actorcritic.15.kf2" # Previously optimize net weight 
                                         # (set empty string if no)
-RENDERRATE              = 3000           # Render rate (rollout and plot) during training (0 = no)
-RENDERACTION            = [ 'saveweights', ] # 'draw', 'rollout'
+RENDERRATE              = 20           # Render rate (rollout and plot) during training (0 = no)
+#RENDERACTION            = [ 'saveweights',  'draw', 'rollout' ]
 REGULAR                 = True          # Render on a regular grid vs random grid
 
 ### --- Environment
-'''
-env                 = Pendulum(1)       # Continuous pendulum
-env.withSinCos      = True              # State is dim-3: (cosq,sinq,qdot) ...
-NX                  = env.nobs          # ... training converges with q,qdot with 2x more neurones.
-NU                  = env.nu            # Control is dim-1: joint torque
+env                     = Pendulum(1)       # Continuous pendulum
+env.withSinCos          = True              # State is dim-3: (cosq,sinq,qdot) ...
+NX                      = env.nobs          # ... training converges with q,qdot with 2x more neurones.
+NU                      = env.nu            # Control is dim-1: joint torque
 
-env.DT              = .15
-env.NDT             = 2
-env.Kf              = 0.2
-env.vmax            = 100
+env.DT                  = .15
+env.NDT                 = 2
+env.Kf                  = 0.2
+env.vmax                = 100
+
+RENDERACTION            = [ 'draw', ]
+
 '''
 
 env = Pendulum(2,length=.5,mass=3.0,armature=10.)
@@ -64,7 +66,10 @@ env.umax            = 15.
 env.modulo          = True
 NSTEPS              = 50
 BATCH_SIZE          = 128
-RESTORE = 'netvalues/double/actorcritic_double.59999'
+RESTORE = 'netvalues/double/actorcritic_double.59999
+RENDERACTION            = [ 'saveweights', ] # 'draw', 'rollout'
+RENDERRATE              = 2000         # Render rate (rollout and plot) during training (0 = no)
+'''
 
 ### --- Q-value and policy networks
 
@@ -184,7 +189,8 @@ if REGULAR:  # Regular sampling
                                                    np.arange(env.vlow,env.vup,.3)) ]).T
 else: # Random sampling
     from pinocchio.utils import rand
-    X=np.vstack([ np.diag([2*np.pi,16])*rand(2)+np.matrix([-np.pi,-8]) for i in range(1000) ])
+    X=rand([10000,2])*np.diag([4*np.pi,16]) + np.matrix([-2*np.pi,-8]) 
+#np.vstack([ np.diag([2*np.pi,16])*rand(2)+np.matrix([-np.pi,-8]) for i in range(1000) ])
 
 ### --- Training
 for episode in range(1,NEPISODES):
@@ -265,10 +271,10 @@ for episode in range(1,NEPISODES):
             # Scatter plot of policy/value funciton sampling (in file)
             plt.clf()
             plt.subplot(1,2,1)
-            plt.scatter(X[:,0],X[:,1],c=U[:],s=50,linewidths=0,alpha=.8,vmin=-2,vmax=2)
+            plt.scatter(X[:,0].flat,X[:,1].flat,c=U[:],s=50,linewidths=0,alpha=.8,vmin=-2,vmax=2)
             plt.colorbar()
             plt.subplot(1,2,2)
-            plt.scatter(X[:,0],X[:,1],c=Q[:],s=50,linewidths=0,alpha=.8)
+            plt.scatter(X[:,0].flat,X[:,1].flat,c=Q[:],s=50,linewidths=0,alpha=.8)
             plt.colorbar()
             plt.savefig('figs/actorcritic_%04d.png' % episode)
 
