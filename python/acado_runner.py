@@ -28,15 +28,26 @@ class AcadoRunner:
             'shift'     : 1,
             }
         self.additionalOptions = ''
-    def run(self,pos,vel,opts = None):
+        self.verbose = False
+        self.warningCodes = [
+            121, # RET_MAX_NUMBER_OF_STEPS_EXCEEDED
+            ]
+    def run(self,pos=None,vel=None,opts = None):
         if not opts: opts = self.options
+        if pos is not None:
+            opts['initpos'] = ' '.join([ '%.20f'%f for f in pos ])
+        if vel is not None:
+            opts['initvel'] = ' '.join([ '%.20f'%f for f in vel ])
+
+        tostr = lambda s: '='+str(s) if s is not None else ''
         self.cmd = self.exe + ' ' \
-            + ' '.join([ '--%s=%s' % (k,str(v)) for k,v in opts.items() ]) \
-            + self.additionalOptions \
-            + ' --initpos=' + ' '.join([ '%.20f'%f for f in flatten(pos)]) \
-            + ' --initvel=' + ' '.join([ '%.20f'%f for f in flatten(vel)]) \
-            + ' > /dev/null'
-        os.system(self.cmd)
+            + ' '.join([ '--%s%s' % (k,tostr(v)) for k,v in opts.items() ]) \
+            + self.additionalOptions
+        if not self.verbose: 
+            self.cmd += ' > /dev/null'
+        self.retcode = os.system(self.cmd) >> 8
+        if self.retcode is not 0 and self.retcode not in self.warningCodes:
+            raise  RuntimeError("Error when executing Acado")
         ctls = f2a(self.controlFile)
         stts = f2a(self.stateFile)
         return ctls[0][1:],stts[-1][-1]
@@ -48,9 +59,23 @@ class AcadoRunner:
         opt['iter'] = i
         return self.run(pos,vel,opt)
         
+    def debug(self,reset=True):
+        if reset:
+            self.verbose = True
+            self.options['plot'] = None
+            self.options['printlevel'] = 2
+        else:
+            self.verbose = False
+            try:
+                del self.options['plot']
+                del self.options['printlevel']
+            except:
+                pass
+
+
     def states(self):
-        return np.array(f2a(self.stateFile))[:,1:3]
+        return np.array(f2a(self.stateFile))[:,1:-1]
     def controls(self):
-        return np.array(f2a(self.controlFile))[:,1:2]
+        return np.array(f2a(self.controlFile))[:,1:]
     def costs(self):
-        return np.array(f2a(self.stateFile))[:,3]
+        return np.array(f2a(self.stateFile))[:,-1]

@@ -52,13 +52,13 @@ class Pendulum:
     See tp1.py for an example of use.
     '''
 
-    def __init__(self,nbJoint=1,length=1.,mass=1.,armature=None):
+    def __init__(self,nbJoint=1,length=1.,mass=1.,armature=None,withDisplay=True):
         '''
         Create a Pinocchio model of a N-pendulum, with N the argument <nbJoint>.
         <length> and <mass> should be double values.
         <armature> should be none, a double or a flat vector 1xNV containing joint armatures.
         '''
-        self.viewer     = Display()
+        self.viewer     = Display() if withDisplay else None
         self.visuals    = []
         self.model      = se3.Model.BuildEmptyModel()
         self.length     = length
