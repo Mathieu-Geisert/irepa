@@ -69,17 +69,15 @@ class Graph:
           is null.
           '''
           assert( first in self.children and second in self.children )
-          if orientation>=0: self.children[first].append(second)
-          if orientation<=0: self.children[second].append(first)
 
-          x1 = self.x[first]
-          x2 = self.x[second]
-
+          self.children[first].append(second)
           self.localPath[ first,second ]      = localPath
           self.localControl[ first,second ]   = localControl
           self.edgeCost[ first,second ]       = cost
 
           if localPath is not None: 
+               x1 = self.x[first]
+               x2 = self.x[second]
                plt.figure(1)
                plt.plot([x1[0,0],x2[0,0]], [x1[1,0],x2[1,0] ])
                plt.axis([env.qlow,env.qup,env.vlow,env.vup])
@@ -114,10 +112,10 @@ class Graph:
           self.children[idx].remove(idx2)
           del self.localPath[idx,idx2]
           del self.localControl[idx,idx2]
-          del self.cost[idx,idx2]
+          del self.edgeCost[idx,idx2]
 
      def removeNode(self,idx):
-          for idx2 in self.children[idx]:
+          for idx2 in reversed(self.children[idx]):
                self.removeEdge(idx,idx2)
           for idx2 in [ k for k,v in self.children.items() if idx in v ]:
                self.removeEdge(idx2,idx)
@@ -128,6 +126,29 @@ class Graph:
      def removeConnex(self,ic):
           for idx in [ n for n,c in enumerate(self.connex) if c==ic ]:
                self.removeNode(idx)
+
+     def plot(self,withPath=True):
+          colorcycle = plt.subplots()[1]._get_lines.color_cycle
+          colors = [ colorcycle.next() for _ in range(1000) ]
+
+          for x in [ x for x in self.x if x is not None ]:
+               plt.plot(x[0,0],x[1,0],'k+')
+          for (i0,i1),path in self.localPath.items():
+               c = self.connex[i0]
+               if withPath: plt.plot(path[:,0],path[:,1],colors[c])
+               else:        plt.plot(path[[0,-1],0],path[[0,-1],1],colors[c])
+
+     def save(self,path):
+          if path[-1]!='/': path+='/'
+          for s in [ 'x', 'children', 'connex', 'localPath', 'localControl', 'edgeCost' ]:
+               np.save(path+s+'.npy',self.__dict__[s])
+     def load(self,path):
+          if path[-1]!='/': path+='/'
+          for s in [ 'x', 'children', 'connex', 'localPath', 'localControl', 'edgeCost' ]:
+               self.__dict__[s] = np.load(path+s+'.npy')[()]
+          self.nconnex = max(self.connex)+1
+          self.existingConnex = sorted(list(set(self.connex)))
+
 
 
 def check(x):
@@ -160,18 +181,24 @@ class ConnectAcado:
           acado.options['shift']    = 0
           acado.options['iter']     = 20
           acado.options['friction'] = 0.2
+          acado.options['printlevel']=1   # To get error code
           acado.setTimeInterval(1.0)
+
+          self.threshold = 1e-3
 
      def __call__(self,x1,x2):
           try:
-               u,cost = self.acado.run(x1,x2)
-               return True
+               self.acado.run(x1,x2)
           except:
                return False
+
+          print self.acado.retcode,x1.T,x2.T
+          if self.acado.retcode == 0: return True
+          X = self.acado.states()
+          return norm(x1-X[0,:]) < self.threshold \
+              and norm(x2-X[-1,:]) < self.threshold
                                 
 connect = ConnectAcado()
-
-XLOW = np.matrix
 
 def simplePrm(nsamples = 1000):
      NCONNECT = 3       # Number of nearest neighbors to try to connect with.
@@ -183,7 +210,7 @@ def simplePrm(nsamples = 1000):
           connected = False
           for idx2 in nearestNeighbor(x,graph.x[:-1],NCONNECT):
                if connect(x,graph.x[idx2]):              # Try connect x to new neighbors
-                    graph.addEdge(idx2,idx,              # Add a new edge
+                    graph.addEdge(idx,idx2,+1,           # Add a new edge
                                   localPath = connect.acado.states(),
                                   localControl = connect.acado.controls() )
                     connected = True
@@ -193,7 +220,7 @@ def simplePrm(nsamples = 1000):
 
 plt.ion()
 graph = Graph()
-graph.addNode()
+graph.addNode(newConnex=True)
 graph.x[0] = zero(2)
 
 nsamples = 200
@@ -202,6 +229,7 @@ NBEST   = 2
 
 connect.acado.setTimeInterval(.2)
 
+acado=connect.acado
 
 for _ in range(nsamples):
      x = env.reset()
@@ -215,9 +243,21 @@ for _ in range(nsamples):
                                connect.acado.states(),
                                connect.acado.controls() ] )
      for idx2, cost, X,U in sorted(edges, key = lambda e: e[1])[:min(len(edges),NBEST)]:
-          graph.addEdge(idx,idx2,              # Add a new edge
+          graph.addEdge(idx,idx2,+1,           # Add a new edge
                         localPath = X,
                         localControl = U,
                         cost = cost)
           graph.renameConnex(graph.connex[idx2],graph.connex[idx])
+
+
+# count = [ 0 for _ in graph.connex ]
+# for k in graph.connex: count[k] += 1
+# for ic in [ k for k,c in enumerate(count) if c<6 and c>0]: graph.removeConnex(ic)
+
+
+#def plotmodulo(x,y, **kwargs):
+     
+     
+
+
 
