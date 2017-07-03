@@ -181,7 +181,6 @@ class ConnectAcado:
           acado.options['shift']    = 0
           acado.options['iter']     = 20
           acado.options['friction'] = 0.2
-          acado.options['printlevel']=1   # To get error code
           acado.setTimeInterval(1.0)
 
           self.threshold = 1e-3
@@ -197,8 +196,11 @@ class ConnectAcado:
           X = self.acado.states()
           return norm(x1-X[0,:]) < self.threshold \
               and norm(x2-X[-1,:]) < self.threshold
+
                                 
 connect = ConnectAcado()
+
+XLOW = np.matrix
 
 def simplePrm(nsamples = 1000):
      NCONNECT = 3       # Number of nearest neighbors to try to connect with.
@@ -230,6 +232,7 @@ NBEST   = 2
 connect.acado.setTimeInterval(.2)
 
 acado=connect.acado
+acado.options['printlevel']=1
 
 for _ in range(nsamples):
      x = env.reset()
@@ -253,11 +256,4 @@ for _ in range(nsamples):
 # count = [ 0 for _ in graph.connex ]
 # for k in graph.connex: count[k] += 1
 # for ic in [ k for k,c in enumerate(count) if c<6 and c>0]: graph.removeConnex(ic)
-
-
-#def plotmodulo(x,y, **kwargs):
-     
-     
-
-
 
