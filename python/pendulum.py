@@ -104,17 +104,22 @@ class Pendulum:
             jointName,bodyName = [name+"_joint",name+"_body"]
             jointId = self.model.addJoint(jointId,se3.JointModelRY(),jointPlacement,jointName)
             self.model.appendBodyToJoint(jointId,inertia,se3.SE3.Identity())
-            self.viewer.viewer.gui.addSphere('world/'+prefix+'sphere'+istr, length*0.15,colorred)
-            self.visuals.append( Visual('world/'+prefix+'sphere'+istr,jointId,se3.SE3.Identity()) )
-            self.viewer.viewer.gui.addCapsule('world/'+prefix+'arm'+istr, length*.1,.8*length,color)
-            self.visuals.append( Visual('world/'+prefix+'arm'+istr,jointId,
-                                        se3.SE3(eye(3),np.matrix([0.,0.,length/2]))))
+            if self.viewer is not None:
+                try:self.viewer.viewer.gui.addSphere('world/'+prefix+'sphere'+istr, length*0.15,colorred)
+                except: pass
+                self.visuals.append( Visual('world/'+prefix+'sphere'+istr,jointId,se3.SE3.Identity()) )
+            
+                try:self.viewer.viewer.gui.addCapsule('world/'+prefix+'arm'+istr, length*.1,.8*length,color)
+                except:pass
+                self.visuals.append( Visual('world/'+prefix+'arm'+istr,jointId,
+                                            se3.SE3(eye(3),np.matrix([0.,0.,length/2]))))
             jointPlacement     = se3.SE3(eye(3),np.matrix([0.0,0.0,length]).T)
 
         self.model.addFrame( se3.Frame('tip',jointId,0,jointPlacement,se3.FrameType.OP_FRAME) )
 
     def display(self,q):
         se3.forwardKinematics(self.model,self.data,q)
+        if self.viewer is None: return
         for visual in self.visuals:
             visual.place( self.viewer,self.data.oMi[visual.jointParent] )
         self.viewer.viewer.gui.refresh()
