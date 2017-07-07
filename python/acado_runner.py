@@ -9,7 +9,7 @@ NHORIZON = int(HORIZON/DT)
 f2a = lambda filename: [ [float(s) for s in l.split() ] for l in open(filename).readlines()]
 flatten = lambda matrx: np.array([matrx]).squeeze().tolist()
 
-class AcadoRunner:
+class AcadoRunner(object):
     def __init__(self,path= "/home/nmansard/src/pinocchio/pycado/build/unittest/discrete_pendulum"):
         self.exe = path
         self.dataroot = '/tmp/mpc'
@@ -32,6 +32,18 @@ class AcadoRunner:
         self.warningCodes = [
             121, # RET_MAX_NUMBER_OF_STEPS_EXCEEDED
             ]
+    @property
+    def iter(self): return self.options['iter']
+    @iter.setter
+    def iter(self,i):  self.options['iter'] = i
+
+    @property
+    def name(self):
+        print 'totot'
+        return 'r'
+    @name.setter
+    def name(self, value): print 'atata'
+    
     def run(self,pos=None,vel=None,opts = None):
         if not opts: opts = self.options
         if pos is not None:
@@ -79,3 +91,4 @@ class AcadoRunner:
         return np.array(f2a(self.controlFile))[:,1:]
     def costs(self):
         return np.array(f2a(self.stateFile))[:,-1]
+

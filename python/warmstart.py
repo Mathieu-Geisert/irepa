@@ -34,7 +34,7 @@ UPDATE_RATE             = 0.01          # Homotopy rate to update the networks
 REPLAY_SIZE             = 10000         # Size of replay buffer
 BATCH_SIZE              = 64            # Number of points to be fed in stochastic gradient
 NH1 = NH2               = 250           # Hidden layer size
-RESTORE                 = "netvalues/actorcritic.15.kf2" # Previously optimize net weight 
+RESTORE                 = "netvalues/actorcritic" # Previously optimize net weight 
                                         # (set empty string if no)
 ### --- Environment
 env                 = Pendulum(1)       # Continuous pendulum
@@ -139,7 +139,7 @@ def rendertrial(x0=None,maxiter=NSTEPS,verbose=True):
         u = sess.run(policy.policy, feed_dict={ policy.x: x.T })
         x, reward = env.step(u)
         env.render()
-        time.sleep(1e-2)
+        time.sleep(1e-1)
         rsum += reward
     if verbose: print 'Lasted ',i,' timestep -- total reward:',rsum
 signal.signal(signal.SIGTSTP, lambda x,y:rendertrial()) # Roll-out when CTRL-Z is pressed
@@ -168,6 +168,8 @@ def policyOptim(x0):
     for i in range(NSTEPS+1):
         u = sess.run(policy.policy, feed_dict={ policy.x: env.obs(env.x).T })
         env.step(u)
+        env.render()
+        time.sleep(5e-2)
         fctl.write( '%.10f \t%.20f\n' % ( i*env.DT, u[0,0] ) )
     fctl.close()
     mod = round(env.x[0,0]/2/np.pi)
@@ -240,4 +242,6 @@ def rolloutmpc(x0 = None, interactive = False):
             raw_input("Press Enter to continue...")
 
 
+# Debug from RRT
+x0 = np.matrix([[ 2.34765817], [ 0.89946379]])
 
