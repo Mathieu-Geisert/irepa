@@ -14,6 +14,12 @@ class AcadoConnect(AcadoRunner):
           self.options['istate']   ='/tmp/guess.stx'
           self.options['icontrol'] = '/tmp/guess.ctl'
           self.options['oparam'] = '/tmp/mpc.prm'
+          self.setDims()
+
+     def setDims(self):
+          if self.model is None: self.NQ,self.NV = 1,1; return
+          self.NQ = self.model.nq
+          self.NV = self.model.nv
 
      def setTimeInterval(self,T,T0=0.001):
           self.options['horizon'] = T
@@ -28,55 +34,43 @@ class AcadoConnect(AcadoRunner):
           withControl = self.model is not None and self.data is not None
 
           N = 3                   # Polynom degree
-          A = zero([4,N+1])       # Matrix of t**i coefficients
+          C = zero([4,N+1])       # Matrix of t**i coefficients
           b = zero(4)             # Vector of x,xdot references
-
-          # hx = []
-          # hu = []
-          # x = x0.copy()
-          # for i in range(NSTEPS):
-          #      t = i*DT
-          #      A[0,:] =  [ t**i for i in range(N+1) ]
-          #      A[1,1:] = [ i*t**(i-1) for i in range(1,N+1) ]
-          #      A[2,:] =  [ T**i for i in range(N+1) ]
-          #      A[3,1:] = [ i*T**(i-1) for i in range(1,N+1) ]
-
-          #      b[:2] = x
-          #      b[2:] = x1
-
-          #      a = [ (i-1)*i*t**(i-2) for i in range(2,N+1) ]*(inv(A)*b)[2:]    # Acceleration
-          #      if withControl:
-          #           tau = se3.rnea(self.model,self.data,x[:1],x[1:],a)          # Torque
-          #           hu.append(tau)
-     
-          #      hx.append(x.copy())
-
-          #      x[1] += a*DT                                                     # Integation v
-          #      x[0] += x[1]*DT                                                  # Integration p
-
-          # hx.append(x1)            # Append terminal state
-          # hu.append(zero(1))       # Append terminal control (meaningless)
-          # X = np.hstack(hx).T
-          # U = np.hstack(hu).T
  
           t = 0.0
-          A[0,:] =  [ t**i for i in range(N+1) ]
-          A[1,1:] = [ i*t**(i-1) for i in range(1,N+1) ]
-          A[2,:] =  [ T**i for i in range(N+1) ]
-          A[3,1:] = [ i*T**(i-1) for i in range(1,N+1) ]
+          C[0,:] =  [ t**i for i in range(N+1) ]
+          C[1,1:] = [ i*t**(i-1) for i in range(1,N+1) ]
+          C[2,:] =  [ T**i for i in range(N+1) ]
+          C[3,1:] = [ i*T**(i-1) for i in range(1,N+1) ]
           
-          b[:2] = x0
-          b[2:] = x1
+          assert(self.NQ == self.NV)
+          P = []
+          V = []
+          A = []
+          U = []
+          for iq in range(self.NQ):
+          
+               b[:2] = x0[iq::self.NQ]
+               b[2:] = x1[iq::self.NQ]
          
-          c = inv(A)*b
+               c = inv(C)*b
 
-          P = np.vstack([ [t**i for i in range(N+1)]*c for t in np.arange(0,T+DT/2,DT) ])
-          V = np.vstack([ [i*t**(i-1) for i in range(1,N+1)]*c[1:] for t in np.arange(0,T+DT/2,DT) ])
-          A = np.vstack([ [i*(i-1)*t**(i-2) for i in range(2,N+1)]*c[2:] for t in np.arange(0,T+DT/2,DT) ])
-          X = np.hstack([P,V])
-          U = np.vstack([ se3.rnea(self.model,self.data,p,v,a) for p,v,a in zip(P,V,A) ]) \
-              if withControl else []
-          
+               P.append( np.vstack([ [t**i for i in range(N+1)]*c for t in np.arange(0,T+DT/2,DT) ]) )
+               V.append (np.vstack([ [i*t**(i-1) for i in range(1,N+1)]*c[1:] for t in np.arange(0,T+DT/2,DT) ]))
+               A.append( np.vstack([ [i*(i-1)*t**(i-2) for i in range(2,N+1)]*c[2:] for t in np.arange(0,T+DT/2,DT) ]))
+               #X = np.hstack([P,V])
+
+          X = np.hstack(P+V)
+
+          if 'armature' in self.options:
+               armature = self.options['armature']
+               dyninv = lambda p,v,a: se3.rnea(self.model,self.data,p,v,a)+armature*a
+          else:
+               dyninv = lambda p,v,a: se3.rnea(self.model,self.data,p,v,a)
+
+          U = np.vstack([ dyninv(p.T,v.T,a.T).T for p,v,a in zip(np.hstack(P),np.hstack(V),np.hstack(A)) ]) if self.model is not None else []
+              
+
           # while horizon T is optimized, timescale should be rescaled between 0 and 1 
           # see http://acado.sourceforge.net/doc/html/d4/d29/example_002.html
           guessX = np.vstack([ np.arange(NSTEPS+1)/float(NSTEPS), X.T, zero(NSTEPS+1).T ]).T
@@ -89,16 +83,16 @@ class AcadoConnect(AcadoRunner):
           return X,U
 
      def run(self,x0,x1,autoInit=True):
-          self.options['finalpos'] = ' '.join([ '%.20f'%f for f in x1.flat[:1] ])
-          self.options['finalvel'] = ' '.join([ '%.20f'%f for f in x1.flat[1:] ])
+          self.options['finalpos'] = ' '.join([ '%.20f'%f for f in x1[:self.NQ].flat ])
+          self.options['finalvel'] = ' '.join([ '%.20f'%f for f in x1[self.NQ:].flat ])
           if autoInit:               self.buildInitGuess(x0,x1)
-          return AcadoRunner.run(self,x0.flat[:1],x0.flat[1:])
+          return AcadoRunner.run(self,x0[:self.NQ].flat,x0[self.NQ:].flat)
 
      def initrun(self,x0,x1,i=100,autoInit = True):
-          self.options['finalpos'] = ' '.join([ '%.20f'%f for f in x1.flat[:1] ])
-          self.options['finalvel'] = ' '.join([ '%.20f'%f for f in x1.flat[1:] ])
+          self.options['finalpos'] = ' '.join([ '%.20f'%f for f in x1[:self.NQ].flat ])
+          self.options['finalvel'] = ' '.join([ '%.20f'%f for f in x1[self.NQ:].flat ])
           if autoInit:               self.buildInitGuess(x0,x1)
-          return AcadoRunner.initrun(self,x0.flat[:1],x0.flat[1:])
+          return AcadoRunner.run(self,x0[:self.NQ].flat,x0[self.NQ:].flat)
 
      def rerun(self): return AcadoRunner.run(self)
 
@@ -111,7 +105,7 @@ class AcadoConnect(AcadoRunner):
      def times(self):
           '''Return times of state and control samplings.'''
           N = self.options['steps']
-          return np.arange(0.,N)/N * self.opttime()
+          return np.arange(0.,N+1)/N * self.opttime()
      def opttime(self):
           return self.params()[0,0]
      
