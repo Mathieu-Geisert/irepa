@@ -193,9 +193,9 @@ class Pendulum:
             else:
                 se3.computeAllTerms(self.model,self.data,q,v)
                 M   = self.data.M 
-                M.flat[::self.nv+1] += self.armature
+                #M.flat[::self.nv+1] += self.armature
                 b   = self.data.nle
-                a   = inv(M)*(tau-b)
+                a   = inv(M+self.armature*eye(self.nv))*(tau-b)
 
             v    += a*DT  # TODO
             q    += v*DT
