@@ -76,10 +76,10 @@ class Pendulum:
         self.umax       = 2.0    # Max torque   (clipped if larger)
         self.withSinCos = False   # If true, state is [cos(q),sin(q),qdot], else [q,qdot]
 
-        self.qlow       = -5.
-        self.qup        = +5.
-        self.vlow       = -self.vmax
-        self.vup        = +self.vmax
+        self.qlow       = np.matrix([-5.,]*nbJoint).T
+        self.qup        = np.matrix([+5.,]*nbJoint).T
+        self.vlow       = np.matrix([-self.vmax,]*nbJoint).T
+        self.vup        = np.matrix([+self.vmax,]*nbJoint).T
 
         self.modulo     = True
 
@@ -138,8 +138,8 @@ class Pendulum:
 
     def reset(self,x0=None):
         if x0 is None: 
-            q0 = rand(self.nq)*(self.qup-self.qlow)+self.qlow
-            v0 = rand(self.nq)*(self.vup-self.vlow)+self.vlow
+            q0 = np.diagflat(self.qup-self.qlow)*rand(self.nq)+self.qlow
+            v0 = np.diagflat(self.vup-self.vlow)*rand(self.nq)+self.vlow
             x0 = np.vstack([q0,v0])
         assert len(x0)==self.nx
         self.x = x0.copy()
