@@ -3,7 +3,7 @@ import matplotlib.pylab as plt
 
 class Cursor(object):
     def __init__(self, ax = None):
-        self.ax = ax
+        #self.ax = ax
         self.x = None
         self.y = None
 
@@ -12,9 +12,10 @@ class Cursor(object):
         self.x, self.y = event.xdata, event.ydata
 
     def connect(self,ax=None):
-        if ax is None: ax = self.ax
-        if ax is None: ax = plt.gca()
-        self.ax = ax
+        #if ax is None: ax = self.ax
+        #if ax is None: ax = plt.gca()
+        #self.ax = ax
+        plt.gca()
         plt.connect('motion_notify_event', self.mouse_move)
 
     def __call__(self): return np.matrix([self.x,self.y]).T

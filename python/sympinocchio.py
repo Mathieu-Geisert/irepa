@@ -238,7 +238,7 @@ if __name__ == '__main__':
         '''
         Generate a symbol table for a specific set of numerical values.
         '''
-        return { m:1,p:.1,c:.05,model.g:9.81,
+        return { m:3.,p:.5,c:.25,model.g:9.81,
                  model.vq[0]:valv[0,0] ,model.vq[1]:valv[1,0],
                  model.q[0] :valq[0,0] ,model.q[1] :valq[1,0]
                  }
@@ -247,7 +247,8 @@ if __name__ == '__main__':
     import pinocchio as se3
     from pinocchio.utils import *
     from pendulum import Pendulum
-    env                 = Pendulum(2,length=.1)       # Continuous pendulum
+    #env                 = Pendulum(2,length=.1)       # Continuous pendulum
+    env                 = Pendulum(2,length=.5,mass=3.0,armature=10.,withDisplay=False)
 
     print 'Statistic assert of model correctness....'
     for i in range(100):
