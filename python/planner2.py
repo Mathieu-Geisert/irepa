@@ -20,15 +20,19 @@ NX                  = env.nobs          # ... training converges with q,qdot wit
 NU                  = env.nu            # Control is dim-1: joint torque
 
 env.vmax            = 100.
-env.Kf              = 0.2
+env.Kf              = np.diagflat([ 0.2, 2. ])
 env.modulo          = False
 
 env.DT              = 0.15
 env.NDT             = 1
 #env.umax            = 15.
-env.umax            = (15.,15.)
-env.umax            = (5.,15.)
+#env.umax            = (15.,15.)
+env.umax            = (5.,10.)
 NSTEPS              = 32
+
+env.qlow[1] = -np.pi
+env.qup [1] = np.pi
+
 
 # Shortcut function to convert SE3 to 7-dof vector.
 M2gv      = lambda M: XYZQUATToViewerConfiguration(se3ToXYZQUAT(M))
@@ -169,6 +173,9 @@ class Graph:
                     time.sleep(.1)
 
      def save(self,path):
+          import os
+          try: os.mkdir(path)
+          except: pass
           if path[-1]!='/': path+='/'
           for s in [ 'x', 'children', 'connex', 'localPath', 'localControl', 'edgeCost' ]:
                np.save(path+s+'.npy',self.__dict__[s])
@@ -267,7 +274,9 @@ class ConnectAcado:
           acado.options['steps']    = 25
           acado.options['shift']    = 0
           acado.options['iter']     = 20
-          acado.options['friction'] = 0.2
+          acado.options['friction'] = \
+              "{0:f} {1:f}".format([env.Kf,]*2) if isinstance(env.Kf,float) \
+              else  "{0:f} {1:f}".format(*env.Kf.diagonal())
           #acado.options['umax'] = "30. 30."
           acado.options['umax'] = "%.2f %.2f" % env.umax
           acado.options['armature'] = env.armature
@@ -659,6 +668,8 @@ def gridPolicy():
                     data.append( Data(x0=x0,X=X,cost=cost,U=U,T=T) )
                except:
                     print 'Failure at #',trial
+                    data.append( Data(x0=x0,X=[],cost=100000.,U=zero(2).T,T=[]) )
+
      return data
 
 def refineGrid(data,NTRIAL=1000,NNEIGHBOR=8,RANDQUEUE=[],PERCENTAGE=.95):
@@ -773,44 +784,46 @@ connect.acado.setTimeInterval(1.)
 acado=connect.acado
 acado.options['printlevel']=1
 
-graph.load('data/planner/double/5_15')
-#for i,x in enumerate(graph.x): graph.plotNode(i,'r+',markeredgewidth=3)
-#graph.plot()
-cursorCoordinate.connect()
-
 '''
-for i in range(10):
+graph.load('data/planner/double/5_15')
+'''
+for i in range(5):
      simplePrm(20,10,10,True)
      print 'Sleeping 10 ... it is time for a little CTRL-C '
      time.sleep(10)
 connectToZero(graph)
-'''
 
-'''
+graph.save('data/planner/double/5_10_limits_100pts')
+
 # ### Filling the prm with additional points.
-env.vup = 3.
-env.vlow = -3.
+env.vup[:] = 3.
+env.vlow[:] = -3.
 for i in range(10):
      simplePrm(10,50,50,False)
      print 'Sleeping 10 ... it is time for a little CTRL-C '
      time.sleep(10)
-env.qup = .2
-env.qlow = -.2
-env.vup = .5
-env.vlow = -.5
+
+graph.save('data/planner/double/5_10_limits_200pts')
+
+env.qup[:] = .2
+env.qlow[:] = -.2
+env.vup[:] = .5
+env.vlow[:] = -.5
 prevSize = len(graph.x)
 for i in range(10):
-     simplePrm(50,10,10,False)
+     simplePrm(20,20,20,False)
      print 'Sleeping 10 ... it is time for a little CTRL-C '
      time.sleep(10)
+
+graph.save('data/planner/double/5_10_limits_400pts')
+
 print 'Connect all points to zero (at least tries)'
-'''
-#connectToZero(graph,560)
-'''
+connectToZero(graph,100)
 print 'Densify PRM'
 densifyPrm(graph)
 connexifyPrm(graph)
-'''
+
+graph.save('data/planner/double/5_10_limits')
 
 # ### Collecting optimal dataset from the PRM
 # data = []
@@ -881,34 +894,32 @@ print "Seed = %d" %  RANDOM_SEED
 np .random.seed     (RANDOM_SEED)
 random.seed         (RANDOM_SEED)
 
-#data = gridPolicy()
-dataflat = np.load('data/planner/double/5_15/grid.npy')
-dataold=[]
-for i,d in enumerate(dataflat): dataold.append(Data(*d))
-Dold = np.vstack([ np.hstack([d.x0.T,d.U[:1,:],np.matrix(d.cost)]) for d in dataold])
-
-dataflat = np.load('data/planner/double/5_15/grid_refine.npy')
+'''
+dataflat = np.load('data/planner/double/5_10_limits/grid.npy')
 data=[]
 for i,d in enumerate(dataflat): data.append(Data(*d))
-#refineGrid(data,3000,NNEIGHBOR=30,PERCENTAGE=.8)
-refineGrid(data,5000,NNEIGHBOR=30,PERCENTAGE=.9)
-#refineGrid(data,20,5)
+'''
+data = gridPolicy()
+refineGrid(data,10000,NNEIGHBOR=30,PERCENTAGE=.9)
+np.save('data/planner/double/5_10_limits/grid.npy',data)
+
 D = np.vstack([ np.hstack([d.x0.T,d.U[:1,:],np.matrix(d.cost)]) for d in data])
 
-N=-1
-diff = Dold[:,-1]-D[:,-1]
-idxdiff = [ i for i,dd in enumerate(diff) if dd>.1 ]
-
 plt.subplot(2,2,1)
-plt.scatter(D[:,0].flat,D[:,1].flat,c=D[:,-1].flat,s=70,alpha=.8,linewidths=0)
-m,M = min(D[:,-1]),max(D[:,-1])
-plt.subplot(2,2,2)
-plt.scatter(Dold[:,0].flat,Dold[:,1].flat,c=Dold[:,-1].flat,s=70,alpha=.8,linewidths=0,vmin=m,vmax=M)
+plt.scatter(D[:,0].flat,D[:,1].flat,c=D[:,-1].flat,s=70,alpha=.8,linewidths=0,vmax=5.)
 plt.subplot(2,2,3)
-plt.scatter(D[idxdiff,0].flat,D[idxdiff,1].flat,c=diff[idxdiff].flat,s=70,alpha=.8,linewidths=0,vmin=m,vmax=M)
+plt.scatter(D[:,0].flat,D[:,1].flat,c=D[:,4].flat,s=70,alpha=.8,linewidths=0)
 plt.subplot(2,2,4)
-plt.plot(sorted(D[:,-1]))
-plt.plot(sorted(Dold[:,-1]))
+plt.scatter(D[:,0].flat,D[:,1].flat,c=D[:,5].flat,s=70,alpha=.8,linewidths=0)
+
+# m,M = min(D[:,-1]),max(D[:,-1])
+# plt.subplot(2,2,2)
+# plt.scatter(Dold[:,0].flat,Dold[:,1].flat,c=Dold[:,-1].flat,s=70,alpha=.8,linewidths=0,vmin=m,vmax=M)
+# plt.subplot(2,2,3)
+# plt.scatter(D[idxdiff,0].flat,D[idxdiff,1].flat,c=diff[idxdiff].flat,s=70,alpha=.8,linewidths=0,vmin=m,vmax=M)
+# plt.subplot(2,2,4)
+# plt.plot(sorted(D[:,-1]))
+# plt.plot(sorted(Dold[:,-1]))
 plt.colorbar()
 
 
@@ -983,3 +994,16 @@ def dggrid(x0,nbpoint=5):
           plt.draw()
           print '%d(%c):'%(r,colors[r]),acado.opttime()
           r+=1
+
+
+
+
+# for i2 in np.arange(-np.pi,np.pi,.1):
+#      for i1 in np.arange(-np.pi,np.pi,.1):
+#           x0 = np.matrix([i1,i2,0,0]).T
+#           if not [d.x0 for d in data if np.allclose(d.x0,x0,1e-3)]:
+#                print x0.T
+#                data.append( Data(x0=x0,X=[],cost=100000.,U=zero(2).T+1000,T=[]) )
+ 
+for i,d in enumerate(data):
+     if not np.allclose(d.x0.T,d.X[0],1e-3): data[i] = Data(x0=d.x0,X=[],cost=100000.,U=zero(2).T,T=[])
