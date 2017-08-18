@@ -7,6 +7,7 @@ import time
 import random
 from pendulum import Pendulum
 import matplotlib.pylab as plt
+from specpath import acadoPath,dataRootPath
 
 RANDOM_SEED = 9 # int((time.time()%10)*1000)
 print "Seed = %d" %  RANDOM_SEED
@@ -14,7 +15,7 @@ np .random.seed     (RANDOM_SEED)
 random.seed         (RANDOM_SEED)
 
 #env                 = Pendulum(2,withDisplay=True)       # Continuous pendulum
-env                 = Pendulum(2,length=.5,mass=3.0,armature=.2,withDisplay=True)
+env                 = Pendulum(2,length=.5,mass=3.0,armature=.2,withDisplay=False)
 env.withSinCos      = False             # State is dim-3: (cosq,sinq,qdot) ...
 NX                  = env.nobs          # ... training converges with q,qdot with 2x more neurones.
 NU                  = env.nu            # Control is dim-1: joint torque
@@ -268,7 +269,7 @@ from acado_connect import AcadoConnect
 
 class ConnectAcado:
      def __init__(self):
-          acado = self.acado = AcadoConnect("/home/nmansard/src/pinocchio/pycado/build/unittest/connect_double_pendulum",
+          acado = self.acado = AcadoConnect(acadoPath,
                                             model=env.model)
           acado.setTimeInterval(1.0)
           acado.options['steps']    = 25
@@ -315,7 +316,7 @@ class ConnectAcado:
                return self.tryit(x1,trials[np.argmin(scores)])
           else:
                return False
-                                 
+
 connect = ConnectAcado()
 
 def simplePrm(NSAMPLES = 1000, NCONNECT = 20, NBEST = 3, interactivePlot = False, nodeQueue = []):
@@ -611,7 +612,10 @@ def optpolicy(x0 = None, nbpoint = 1, nbcorrect = 1, withPlot = False):
                plt.plot(Xac[:,0],Xac[:,1],'r', linewidth=2)
                plt.draw()
 
-          solutions.append([ acado.opttime(),Xac,Uac,acado.times() ])
+          if norm(X[0,:]-x0.T)<1e-3 and norm(X[-1,:]-x1.T)<1e-3:
+               solutions.append([ acado.opttime(),Xac,Uac,acado.times() ])
+          else:
+               print 'Error when generating optimal trajectory: boundary constraints not respected'
 
      if len(solutions)<nbcorrect:
           raise Exception("Not enough points")
@@ -715,9 +719,14 @@ def refineGrid(data,NTRIAL=1000,NNEIGHBOR=8,RANDQUEUE=[],PERCENTAGE=.95):
                     #print '\t\t\t\t\tfailed...'
                     continue
                
+               X = acado.states()
+               if norm(X[0,:]-x0mod.T)>1e-3 or norm(X[-1,:]-x1.T)>1e-3: 
+                    print 'Error in refine grid: boundary constraints not respected'
+                    continue
+
                #print 'From %4d:%2.5f ... from %4d(%2.5f):%2.5f' %( idx0,d0.cost,idx2,d2.cost,acado.opttime())
                if acado.opttime()<d0.cost:
-                    data[idx0] = Data( x0=x0, X=acado.states(), U=acado.controls(), 
+                    data[idx0] = Data( x0=x0, X=X, U=acado.controls(), 
                                        T=acado.times(), cost=acado.opttime() )
                     print "#%4d: %4d is best from %4d" %(trial,idx0,idx2),"\t(%.3f vs %.3f)"%(acado.opttime(),d0.cost)
                     break
@@ -784,8 +793,7 @@ connect.acado.setTimeInterval(1.)
 acado=connect.acado
 acado.options['printlevel']=1
 
-'''
-graph.load('data/planner/double/5_15')
+graph.load(dataRootPath)
 '''
 for i in range(5):
      simplePrm(20,10,10,True)
@@ -793,7 +801,7 @@ for i in range(5):
      time.sleep(10)
 connectToZero(graph)
 
-graph.save('data/planner/double/5_10_limits_100pts')
+graph.save(dataRootPath+'_100pts')
 
 # ### Filling the prm with additional points.
 env.vup[:] = 3.
@@ -803,7 +811,7 @@ for i in range(10):
      print 'Sleeping 10 ... it is time for a little CTRL-C '
      time.sleep(10)
 
-graph.save('data/planner/double/5_10_limits_200pts')
+graph.save(dataRootPath+'_200pts')
 
 env.qup[:] = .2
 env.qlow[:] = -.2
@@ -815,7 +823,7 @@ for i in range(10):
      print 'Sleeping 10 ... it is time for a little CTRL-C '
      time.sleep(10)
 
-graph.save('data/planner/double/5_10_limits_400pts')
+graph.save(dataRootPath+'_400pts')
 
 print 'Connect all points to zero (at least tries)'
 connectToZero(graph,100)
@@ -823,7 +831,8 @@ print 'Densify PRM'
 densifyPrm(graph)
 connexifyPrm(graph)
 
-graph.save('data/planner/double/5_10_limits')
+graph.save(dataRootPath)
+'''
 
 # ### Collecting optimal dataset from the PRM
 # data = []
@@ -894,14 +903,14 @@ print "Seed = %d" %  RANDOM_SEED
 np .random.seed     (RANDOM_SEED)
 random.seed         (RANDOM_SEED)
 
-'''
-dataflat = np.load('data/planner/double/5_10_limits/grid.npy')
+dataflat = np.load(dataRootPath+'/grid.npy')
 data=[]
 for i,d in enumerate(dataflat): data.append(Data(*d))
 '''
 data = gridPolicy()
 refineGrid(data,10000,NNEIGHBOR=30,PERCENTAGE=.9)
-np.save('data/planner/double/5_10_limits/grid.npy',data)
+np.save(dataRootPath+'/grid.npy',data)
+'''
 
 D = np.vstack([ np.hstack([d.x0.T,d.U[:1,:],np.matrix(d.cost)]) for d in data])
 
@@ -1005,5 +1014,5 @@ def dggrid(x0,nbpoint=5):
 #                print x0.T
 #                data.append( Data(x0=x0,X=[],cost=100000.,U=zero(2).T+1000,T=[]) )
  
-for i,d in enumerate(data):
-     if not np.allclose(d.x0.T,d.X[0],1e-3): data[i] = Data(x0=d.x0,X=[],cost=100000.,U=zero(2).T,T=[])
+# for i,d in enumerate(data):
+#     if not np.allclose(d.x0.T,d.X[0],1e-3): data[i] = Data(x0=d.x0,X=[],cost=100000.,U=zero(2).T,T=[])
