@@ -44,19 +44,23 @@ class AcadoRunner(object):
     @name.setter
     def name(self, value): print 'atata'
     
-    def run(self,pos=None,vel=None,opts = None):
-        if not opts: opts = self.options
+    def generateCommandLine(self,pos,vel,opts):
         if pos is not None:
             opts['initpos'] = ' '.join([ '%.20f'%f for f in pos ])
         if vel is not None:
             opts['initvel'] = ' '.join([ '%.20f'%f for f in vel ])
 
         tostr = lambda s: '='+str(s) if s is not None else ''
-        self.cmd = self.exe + ' ' \
+        cmd = self.exe + ' ' \
             + ' '.join([ '--%s%s' % (k,tostr(v)) for k,v in opts.items() ]) \
             + self.additionalOptions
         if not self.verbose: 
-            self.cmd += ' > /dev/null'
+            cmd += ' > /dev/null'
+        return cmd        
+
+    def run(self,pos=None,vel=None,opts = None):
+        if not opts: opts = self.options
+        self.cmd = self.generateCommandLine(pos,vel,opts)
         self.retcode = os.system(self.cmd) >> 8
         if self.retcode is not 0 and self.retcode not in self.warningCodes:
             raise  RuntimeError("Error when executing Acado")
