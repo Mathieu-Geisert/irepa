@@ -7,7 +7,7 @@ import time
 import random
 from pendulum import Pendulum
 import matplotlib.pylab as plt
-from specpath import acadoPath,dataRootPath
+from specpath import acadoPath,dataRootPath,acadoTxtPath
 
 RANDOM_SEED = 9 # int((time.time()%10)*1000)
 print "Seed = %d" %  RANDOM_SEED
@@ -155,8 +155,8 @@ class Graph:
           
      def plot(self,withPath=True):
           colorcycle = plt.gca()._get_lines.color_cycle
-          colors = [ colorcycle.next() for _ in range(1000) ] \
-              if len(self.existingConnex)>1 else ['k','.65']*1000
+          colors = [ colorcycle.next() for _ in range(10000) ] \
+              if len(self.existingConnex)>1 else ['k','.65']*10000
           
 
           for ix in range(len(self.x)): self.plotNode(ix)
@@ -270,7 +270,7 @@ from acado_connect import AcadoConnect
 class ConnectAcado:
      def __init__(self):
           acado = self.acado = AcadoConnect(acadoPath,
-                                            model=env.model)
+                                            model=env.model,datadir=acadoTxtPath)
           acado.setTimeInterval(1.0)
           acado.options['steps']    = 25
           acado.options['shift']    = 0
@@ -278,26 +278,15 @@ class ConnectAcado:
           acado.options['friction'] = \
               "{0:f} {1:f}".format([env.Kf,]*2) if isinstance(env.Kf,float) \
               else  "{0:f} {1:f}".format(*env.Kf.diagonal())
-          #acado.options['umax'] = "30. 30."
-          acado.options['umax'] = "%.2f %.2f" % env.umax
+          acado.options['umax']     = "%.2f %.2f" % env.umax
           acado.options['armature'] = env.armature
           acado.setTimeInterval(1.5)
 
           self.threshold = 1e-3
-
-     def tryit(self,x1,x2):
-          #print 'Try ',x1[:2].T,x2[:2].T
-          try:
-               self.acado.run(x1,x2)
-          except:
-               return False
-          if self.acado.retcode == 0: return True
-          X = self.acado.states()
-          return norm(x1.T-X[0,:]) < self.threshold \
-              and norm(x2.T-X[-1,:]) < self.threshold
+          self.acado.setup_async()
+          self.idxBest   = None   # Store the index of the best previous trial
 
      def __call__(self,x1,x2,verbose=False):
-          #return self.tryit(x1,x2)
           dq     = (x2[:2] - x1[:2])%(2*np.pi)
           x2     = x2.copy()
           x2[:2] = x1[:2] + dq
@@ -306,16 +295,29 @@ class ConnectAcado:
 
           trials = [ x2, x2+PI0, x2+PI1, x2+PI0+PI1 ]
           scores = [ np.inf, ]*4
-          #trials = random.sample(trials,4)
-
+          jobs   = {}
+          
           for i,x2 in enumerate(trials):
                if verbose: print 'Trying (%d)'%i,x2.T
-               if self.tryit(x1,x2) : scores[i] = acado.opttime()
+               jobs[i] = self.acado.run_async(x1,x2)
 
-          if np.any([s<np.inf for s in scores]):
-               return self.tryit(x1,trials[np.argmin(scores)])
-          else:
-               return False
+          idxBest = -1; scoreBest = np.inf
+          for i,x2 in enumerate(trials):
+               if self.acado.join(jobs[i],x1=x1,x2=x2,threshold=self.threshold):
+                    cost = self.acado.opttime(jobs[i])
+                    if cost < scoreBest: idxBest = jobs[i]; scoreBest = cost
+
+          self.idxBest = idxBest
+          return idxBest>=0
+
+     def states(self):
+          return self.acado.states(self.idxBest)
+     def controls(self): 
+          return self.acado.controls(self.idxBest)
+     def opttime(self):
+          return self.acado.opttime(self.idxBest)
+     def times(self):
+          return self.acado.times(self.idxBest)
 
 connect = ConnectAcado()
 
@@ -338,15 +340,15 @@ def simplePrm(NSAMPLES = 1000, NCONNECT = 20, NBEST = 3, interactivePlot = False
           for idx2 in nearestNeighbor(x,graph.x[:-1],NCONNECT):
                # From x to graph
                if connect(x,graph.x[idx2]): # or connect(x+MODULO,graph.x[idx2]):
-                    edges.append( [ idx, idx2, connect.acado.opttime(), 
-                                    connect.acado.states(),
-                                    connect.acado.controls() ] )
+                    edges.append( [ idx, idx2, connect.opttime(), 
+                                    connect.states(),
+                                    connect.controls() ] )
                     doConnect = True
                # From graph to x
                if connect(graph.x[idx2],x): # or connect(graph.x[idx2],x+MODULO):
-                    edges.append( [ idx2, idx, connect.acado.opttime(), 
-                                    connect.acado.states(),
-                                    connect.acado.controls() ] )
+                    edges.append( [ idx2, idx, connect.opttime(), 
+                                    connect.states(),
+                                    connect.controls() ] )
 
           '''
           if not doConnect:  # Force tree structure by cosntraining upward connectivity to 0
@@ -376,43 +378,6 @@ def visibilityPrm(NSAMPLES = 1000, NCONNECT = 20, interactivePlot = False):
           idx = graph.addNode(newConnex=True)           # Index of the new node
           graph.x[idx] = x                              # Add a new node for configuration x
           edges = {}
-
-          for connex in graph.existingConnex:
-               edges[connex] = { 'way': [], 'back': [] }
-               iconnex = graph.connexIndexes(connex)               # Indexes of current connex component.
-               for idx2 in nearestNeighbor(x,[ graph.x[i] for i in iconnex]):
-                    # Try connect from x to graph
-                    if connect(x,graph.x[iconnex[idx2]]):
-                         edges[connex]['way'].append( [ idx, iconnex[idx2], connect.acado.opttime(), 
-                                                        connect.acado.states(),
-                                                        connect.acado.controls() ] )
-                    # From graph to x
-                    if connect(graph.x[idx2],x):
-                         edges[connex]['back'].append( [ iconnect[idx2], idx, connect.acado.opttime(), 
-                                                         connect.acado.states(),
-                                                         connect.acado.controls() ] )
-               if len(edges[connex]['way'])==0 or len(edges[connex]['back'])==0:
-                    del edges[connex,'way']
-                    del edges[connex,'back']
-
-          if len(edges) == 1 : 
-               print 'Connect only once ... cancel'
-               graph.removeNode(idx)  
-               continue
-
-          if interactivePlot: graph.plotNode(idx)
-
-          for connex,wayback in edges.items():
-               for es in wayback.values:
-                    for idx1, idx2, cost, X,U in sorted(es, key = lambda e: e[1])[:min(len(edges),NBEST)]:
-                         graph.addEdge(idx1,idx2,+1,           # Add a new edge
-                                       localPath = X,
-                                       localControl = U,
-                                       cost = cost)
-               graph.renameConnex(graph.connex[idx2],graph.connex[idx1])
-               if interactivePlot: graph.plotEdge(idx1,idx2,withTruePath=True)
-          if interactivePlot: plt.draw() #; time.sleep(1.)
-
 
 def prunePRM(graph,percent=.8):
      '''
@@ -569,6 +534,70 @@ def test(idx = None):
      plt.plot(Xac[:,0],Xac[:,1],'g', linewidth=2)
      return X,Xac
 
+# def optpolicy_mono(x0 = None, nbpoint = 1, nbcorrect = 1, withPlot = False):
+#      x0 = env.reset() if x0 is None else x0.copy()
+#      NQ = 2
+#      PI = np.pi
+#      PPI = 2*PI
+
+#      solutions = []
+#      t0 = time.time()
+#      for idx in nearestNeighbor(x0,graph.x,nbpoint):
+#           print "Try from ",idx,time.time()-t0
+#           xnear = graph.x[idx]
+#           dq = ((x0-xnear)[:NQ]+PI)%PPI - PI
+#           x0[:NQ] = xnear[:NQ]+dq
+
+#           X,U,times = pathFrom(idx)
+#           ttime = times[-1]
+
+#           np.savetxt(acado.options['istate'],   np.vstack([times/ttime,X.T]).T )
+#           np.savetxt(acado.options['icontrol'], np.vstack([times/ttime,U.T]).T )
+#           acado.options['horizon'] = ttime
+#           acado.options['Tmax'] = 40*ttime
+
+#           x1 = X[-1,:].T
+
+#           acado.iter = 80
+#           acado.options['steps'] = 20
+#           acado.debug(False)
+#           # acado.debug(True)
+#           # acado.iter=5
+#           try:
+#                acado.run( x0,x1,autoInit=False)
+#           except:
+#                # print idx
+#                # if idx not in [51,]:return
+#                continue
+
+#           Xac = acado.states()
+#           Uac = acado.controls()
+
+#           if withPlot:
+#                plt.plot(X[:,0],X[:,1],'g', linewidth=2)
+#                plt.plot(Xac[:,0],Xac[:,1],'r', linewidth=2)
+#                plt.draw()
+
+#           if norm(Xac[0,:]-x0.T)<1e-3 and norm(Xac[-1,:]-x1.T)<1e-3:
+#                solutions.append([ acado.opttime(),Xac,Uac,acado.times() ])
+#                print '\t\t\tSuccess'
+#           else:
+#                print 'Error when generating optimal trajectory: boundary constraints not respected'
+
+#      if len(solutions)<nbcorrect:
+#           raise Exception("Not enough points")
+
+#      solutions = sorted(solutions,key=lambda s:s[0])
+#      mintraj = solutions[0][0]
+#      checktraj = solutions[nbcorrect-1][0]
+
+#      if checktraj>1.1*mintraj:
+#           raise Exception("Check point is too large")
+     
+#      #print [s[0] for s in solutions]
+#      return solutions[0]
+
+
 def optpolicy(x0 = None, nbpoint = 1, nbcorrect = 1, withPlot = False):
      x0 = env.reset() if x0 is None else x0.copy()
      NQ = 2
@@ -576,8 +605,19 @@ def optpolicy(x0 = None, nbpoint = 1, nbcorrect = 1, withPlot = False):
      PPI = 2*PI
 
      solutions = []
+     if 'horizon' in acado.options: del acado.options['horizon']
+     if 'Tmax'    in acado.options: del acado.options['Tmax']
+     acado.iter = 80
+     acado.options['steps'] = 20
+     acado.debug(False)
+     # acado.debug(True)
+     # acado.iter=5
+
+     jobs = {}
      for idx in nearestNeighbor(x0,graph.x,nbpoint):
-          #print "Try from ",idx
+          #print "Try from ",idx,time.time()-t0
+          jobid = acado.book_async()
+
           xnear = graph.x[idx]
           dq = ((x0-xnear)[:NQ]+PI)%PPI - PI
           x0[:NQ] = xnear[:NQ]+dq
@@ -585,37 +625,30 @@ def optpolicy(x0 = None, nbpoint = 1, nbcorrect = 1, withPlot = False):
           X,U,times = pathFrom(idx)
           ttime = times[-1]
 
-          np.savetxt(acado.options['istate'],   np.vstack([times/ttime,X.T]).T )
-          np.savetxt(acado.options['icontrol'], np.vstack([times/ttime,U.T]).T )
-          acado.options['horizon'] = ttime
-          acado.options['Tmax'] = 40*ttime
+          np.savetxt(acado.options['istate']+acado.async_ext(jobid),   np.vstack([times/ttime,X.T]).T )
+          np.savetxt(acado.options['icontrol']+acado.async_ext(jobid), np.vstack([times/ttime,U.T]).T )
 
           x1 = X[-1,:].T
 
-          acado.iter = 80
-          acado.options['steps'] = 20
-          acado.debug(False)
-          # acado.debug(True)
-          # acado.iter=5
-          try:
-               acado.run( x0,x1,autoInit=False)
-          except:
-               # print idx
-               # if idx not in [51,]:return
-               continue
-
-          Xac = acado.states()
-          Uac = acado.controls()
+          acado.run_async( x0,x1,autoInit=False,jobid=jobid,
+                           additionalOptions = ' --horizon=%.10f --Tmax=%.10f' % (ttime,5*ttime) )
+          jobs[jobid] = [x0,x1]
 
           if withPlot:
                plt.plot(X[:,0],X[:,1],'g', linewidth=2)
-               plt.plot(Xac[:,0],Xac[:,1],'r', linewidth=2)
-               plt.draw()
 
-          if norm(X[0,:]-x0.T)<1e-3 and norm(X[-1,:]-x1.T)<1e-3:
-               solutions.append([ acado.opttime(),Xac,Uac,acado.times() ])
-          else:
-               print 'Error when generating optimal trajectory: boundary constraints not respected'
+     for jobid,[x0,x1] in jobs.items():
+          #print "Join ",jobid,time.time()-t0
+          if acado.join(jobid,x0,x1): 
+               Xac = acado.states(jobid)
+               Uac = acado.controls(jobid)
+               Tac = acado.times(jobid)
+               cost = acado.opttime(jobid)
+               solutions.append([ cost,Xac,Uac,Tac ])
+
+               if withPlot:
+                    plt.plot(Xac[:,0],Xac[:,1],'r', linewidth=2)
+                    plt.draw()
 
      if len(solutions)<nbcorrect:
           raise Exception("Not enough points")
@@ -627,7 +660,7 @@ def optpolicy(x0 = None, nbpoint = 1, nbcorrect = 1, withPlot = False):
      if checktraj>1.1*mintraj:
           raise Exception("Check point is too large")
      
-     print [s[0] for s in solutions]
+     #print [s[0] for s in solutions]
      return solutions[0]
 
 
@@ -636,12 +669,12 @@ def connectToZero(graph,idx0=1):
           print 'Connect with ',i
           if 0 not in graph.children[i] and connect(graph.x[i],graph.x[0]):
                print 'yes'
-               graph.addEdge(i,0,+1,localPath = acado.states(),localControl = acado.controls(),
-                             cost = acado.opttime())
+               graph.addEdge(i,0,+1,localPath = connect.states(),localControl = connect.controls(),
+                             cost = connect.opttime())
           if i not in graph.children[0] and connect(graph.x[0],graph.x[i]):
                print 'yes'
-               graph.addEdge(0,i,+1,localPath = acado.states(),localControl = acado.controls(),
-                             cost = acado.opttime())
+               graph.addEdge(0,i,+1,localPath = connect.states(),localControl = connect.controls(),
+                             cost = connect.opttime())
 
 def dataFromCursor():
      x0 = np.vstack([cursorCoordinate(),zero(2)])
@@ -659,11 +692,13 @@ def playFromCursor():
 from collections import namedtuple
 Data = namedtuple('Data', [ 'x0', 'X', 'cost', 'U', 'T' ])
 
-def gridPolicy():
+def gridPolicy(step=.1):
      data = []
      trial = 0
-     for i2 in np.arange(-np.pi,np.pi,.1):
-          for i1 in np.arange(-np.pi,np.pi,.1):
+     #shuffle = lambda l: random.sample(l,len(l))
+     shuffle = lambda l:l
+     for i2 in shuffle(np.arange(-np.pi+.01,np.pi-.01,step)):
+          for i1 in shuffle(np.arange(-np.pi,np.pi,step)):
                trial += 1
                print 'Traj #',trial
                try:
@@ -676,23 +711,82 @@ def gridPolicy():
 
      return data
 
+# def refineGrid(data,NTRIAL=1000,NNEIGHBOR=8,RANDQUEUE=[],PERCENTAGE=.95):
+#      for trial in range(NTRIAL):
+
+#           idx0 = RANDQUEUE.pop() if len(RANDQUEUE)>0 else random.randint(0,len(data)-1)
+#           d0 = data[idx0]
+#           x0 = d0.x0
+#           NQ=2
+#           PI = np.pi
+#           PPI = 2*PI
+#           #print "Trial #",trial,idx0,x0[:2].T
+          
+#           for idx2 in nearestNeighbor(x0, [ d.x0 for d in data ],NNEIGHBOR,fullSort=True ):
+#                if idx2 == idx0: continue
+
+#                d2 = data[idx2]
+#                if d2.cost>d0.cost*PERCENTAGE: continue
+
+#                ttime,X,U,T = d2.cost,d2.X,d2.U,d2.T
+
+#                xnear = X[:1,:].T
+#                dq = ((x0-xnear)[:NQ]+PI)%PPI - PI
+#                x0mod = x0.copy()
+#                x0mod[:NQ] = xnear[:NQ]+dq
+
+#                x1 = X[-1,:].T
+
+#                np.savetxt(acado.options['istate'],   np.vstack([T/ttime,X.T]).T )
+#                np.savetxt(acado.options['icontrol'], np.vstack([T/ttime,U.T]).T )
+
+#                acado.options['horizon'] = ttime
+#                acado.options['Tmax'] = 2*ttime
+
+#                #print '\t\t\tTry ',x0[:2].T,'(%.4f) by '%d0.cost,xnear[:2].T,'(%.4f)'%d2.cost
+
+#                acado.iter = 80
+#                acado.options['steps'] = 20
+#                try:
+#                     acado.run(x0mod,x1,autoInit=False)
+#                     #print '\t\t\t\t\twas %.5f now %.5f'%(d0.cost,acado.opttime())
+#                except: 
+#                     #print '\t\t\t\t\tfailed...'
+#                     continue
+               
+#                X = acado.states()
+#                if norm(X[0,:]-x0mod.T)>1e-3 or norm(X[-1,:]-x1.T)>1e-3: 
+#                     print 'Error in refine grid: boundary constraints not respected'
+#                     continue
+
+#                #print 'From %4d:%2.5f ... from %4d(%2.5f):%2.5f' %( idx0,d0.cost,idx2,d2.cost,acado.opttime())
+#                if acado.opttime()<d0.cost:
+#                     data[idx0] = Data( x0=x0, X=X, U=acado.controls(), 
+#                                        T=acado.times(), cost=acado.opttime() )
+#                     print "#%4d: %4d is best from %4d" %(trial,idx0,idx2),"\t(%.3f vs %.3f)"%(acado.opttime(),d0.cost)
+#                     break
+
 def refineGrid(data,NTRIAL=1000,NNEIGHBOR=8,RANDQUEUE=[],PERCENTAGE=.95):
+     NQ = env.model.nq;   PI = np.pi;    PPI = 2*PI
+     if 'horizon' in acado.options: del acado.options['horizon']
+     if 'Tmax'    in acado.options: del acado.options['Tmax']
+     acado.iter = 80
+     acado.options['steps'] = 20
      for trial in range(NTRIAL):
 
           idx0 = RANDQUEUE.pop() if len(RANDQUEUE)>0 else random.randint(0,len(data)-1)
           d0 = data[idx0]
           x0 = d0.x0
-          NQ=2
-          PI = np.pi
-          PPI = 2*PI
           #print "Trial #",trial,idx0,x0[:2].T
           
-          for idx2 in nearestNeighbor(x0, [ d.x0 for d in data ],NNEIGHBOR,fullSort=True ):
+          jobs = {}
+          for idx2 in nearestNeighbor(x0, [ d.x0 for d in data ],NNEIGHBOR+1,fullSort=True ):
                if idx2 == idx0: continue
 
                d2 = data[idx2]
                if d2.cost>d0.cost*PERCENTAGE: continue
 
+               jobid = acado.book_async()
                ttime,X,U,T = d2.cost,d2.X,d2.U,d2.T
 
                xnear = X[:1,:].T
@@ -702,33 +796,22 @@ def refineGrid(data,NTRIAL=1000,NNEIGHBOR=8,RANDQUEUE=[],PERCENTAGE=.95):
 
                x1 = X[-1,:].T
 
-               np.savetxt(acado.options['istate'],   np.vstack([T/ttime,X.T]).T )
-               np.savetxt(acado.options['icontrol'], np.vstack([T/ttime,U.T]).T )
+               np.savetxt(acado.options['istate']  +acado.async_ext(jobid), np.vstack([T/ttime,X.T]).T )
+               np.savetxt(acado.options['icontrol']+acado.async_ext(jobid), np.vstack([T/ttime,U.T]).T )
 
-               acado.options['horizon'] = ttime
-               acado.options['Tmax'] = 2*ttime
-
-               #print '\t\t\tTry ',x0[:2].T,'(%.4f) by '%d0.cost,xnear[:2].T,'(%.4f)'%d2.cost
-
-               acado.iter = 80
-               acado.options['steps'] = 20
-               try:
-                    acado.run(x0mod,x1,autoInit=False)
-                    #print '\t\t\t\t\twas %.5f now %.5f'%(d0.cost,acado.opttime())
-               except: 
-                    #print '\t\t\t\t\tfailed...'
-                    continue
-               
-               X = acado.states()
-               if norm(X[0,:]-x0mod.T)>1e-3 or norm(X[-1,:]-x1.T)>1e-3: 
-                    print 'Error in refine grid: boundary constraints not respected'
-                    continue
-
-               #print 'From %4d:%2.5f ... from %4d(%2.5f):%2.5f' %( idx0,d0.cost,idx2,d2.cost,acado.opttime())
-               if acado.opttime()<d0.cost:
-                    data[idx0] = Data( x0=x0, X=X, U=acado.controls(), 
-                                       T=acado.times(), cost=acado.opttime() )
-                    print "#%4d: %4d is best from %4d" %(trial,idx0,idx2),"\t(%.3f vs %.3f)"%(acado.opttime(),d0.cost)
+               acado.run_async(x0mod,x1,autoInit=False,jobid=jobid,
+                               additionalOptions= ' --horizon=%.10f --Tmax=%.10f' % (ttime,2*ttime))
+               jobs[jobid] = [x0mod,x1]
+     
+          for jobid,[x0mod,x1] in jobs.items():
+               if acado.join(jobid,x0,x1):
+                    if acado.opttime(jobid)<d0.cost:
+                         data[idx0] = Data( x0  = x0, 
+                                            X   = acado.states  (jobid),
+                                            U   = acado.controls(jobid), 
+                                            T   = acado.times   (jobid),
+                                            cost= acado.opttime (jobid) )
+                    print "#%4d: %4d is best from %4d" %(trial,idx0,idx2),"\t(%.3f vs %.3f)"%(acado.opttime(jobid),d0.cost)
                     break
 
 
@@ -772,9 +855,9 @@ def connexifyPrm(graph,NTRIAL = 1000,PAUSEFREQ = 50,NCONNECT=5):
                if idx2 in graph.children[ides]: continue
                if connect(graph.x[ides],graph.x[idx2]):
                     graph.addEdge(ides,idx2,+1,
-                                  localPath=acado.states(),
-                                  localControl=acado.controls(),
-                                  cost=acado.opttime())
+                                  localPath=connect.states(),
+                                  localControl=connect.controls(),
+                                  cost=connect.opttime())
                     print 'Connect %d to %d'%(ides,idx2)
                          
                
@@ -793,116 +876,55 @@ connect.acado.setTimeInterval(1.)
 acado=connect.acado
 acado.options['printlevel']=1
 
+'''
 graph.load(dataRootPath)
 '''
 for i in range(5):
      simplePrm(20,10,10,True)
      print 'Sleeping 10 ... it is time for a little CTRL-C '
      time.sleep(10)
-connectToZero(graph)
 
 graph.save(dataRootPath+'_100pts')
 
-# ### Filling the prm with additional points.
+### Filling the prm with additional points at low speed.
 env.vup[:] = 3.
 env.vlow[:] = -3.
-for i in range(10):
+for i in range(5):
      simplePrm(10,50,50,False)
      print 'Sleeping 10 ... it is time for a little CTRL-C '
      time.sleep(10)
 
 graph.save(dataRootPath+'_200pts')
 
+### Filling the prm with additional points close to up equilibrium.
 env.qup[:] = .2
 env.qlow[:] = -.2
 env.vup[:] = .5
 env.vlow[:] = -.5
 prevSize = len(graph.x)
-for i in range(10):
-     simplePrm(20,20,20,False)
+for i in range(5):
+     simplePrm(10,20,20,False)
      print 'Sleeping 10 ... it is time for a little CTRL-C '
      time.sleep(10)
 
 graph.save(dataRootPath+'_400pts')
 
 print 'Connect all points to zero (at least tries)'
-connectToZero(graph,100)
+connectToZero(graph)
 print 'Densify PRM'
 densifyPrm(graph)
 connexifyPrm(graph)
 
 graph.save(dataRootPath)
-'''
 
-# ### Collecting optimal dataset from the PRM
-# data = []
-# for i,x in enumerate(graph.x):
-#      if i==0: continue
-#      print '*** Traj #',i
-#      time.sleep(2)
-#      try:
-#           Xac,Uac,Tac = optpathFrom(i)
-#           Tf = Tac[-1]
-#           for t,x,u in zip(Tac,Xac,Uac):
-#                data.append( np.hstack([ x,u,Tf-t ]) )
-#      except:
-#           print 'error'
-
-# D=np.vstack(data)
-# plt.scatter(D[:,0],D[:,1],c=D[:,6],linewidths=0)
-
-# Generate data as perturbation of thwe graph points
-# data = []
-# failures = []
-# for idx,x in enumerate(graph.x):
-#      if idx==0: continue
-#      #if idx<79: continue
-#      print '*** Traj #',idx,time.ctime()
-#      time.sleep(2)
-
-#      X,U,times = pathFrom(idx)
-#      np.savetxt(acado.options['istate'],   np.vstack([times/times[-1],X.T]).T )
-#      np.savetxt(acado.options['icontrol'], np.vstack([times/times[-1],U.T]).T )
-#      acado.options['horizon'] = times[-1]
-#      acado.options['Tmax'] = 4*times[-1]
-
-#      x0,x1 = X[0,:].T,X[-1,:].T
-#      acado.iter = 100
-#      acado.options['steps'] = 50
-
-#      for i in range(10):
-#           try:
-#                #dx = np.diag([.3,.6,1.,1.])*rand(4)
-#                dx = np.diag([.5,.9,1.5,1.8])*rand(4)
-#                acado.run( x0+dx,x1,autoInit=False)
-#                Xac = acado.states()
-#                Uac = acado.controls()
-#                Tac = acado.times()
-#                Tf = Tac[-1]
-#                for t,x,u in zip(Tac,Xac,Uac):
-#                     data.append( np.hstack([ x,u,Tf-t ]) )
-#           except:
-#                failures.append(dx)
-
-
-# colors = ['k','r','g','b','y','y','y','y']
-# for i in range(1,len(graph.x)):
-#      try:c = len(astar(graph,i,0))-1
-#      except:continue
-#      X,_,_ = pathFrom(i)
-#      X[:,:2] -= X[-1,:2]
-#      plt.plot(X[:,0],X[:,1],colors[c])
-#      plt.draw()
-#      print i
-#      time.sleep(.5)
-
-     
+### Generate the grid ##########################################################
 
 RANDOM_SEED =  int((time.time()%10)*1000)
 print "Seed = %d" %  RANDOM_SEED
 np .random.seed     (RANDOM_SEED)
 random.seed         (RANDOM_SEED)
 
+'''
 dataflat = np.load(dataRootPath+'/grid.npy')
 data=[]
 for i,d in enumerate(dataflat): data.append(Data(*d))
@@ -910,8 +932,8 @@ for i,d in enumerate(dataflat): data.append(Data(*d))
 data = gridPolicy()
 refineGrid(data,10000,NNEIGHBOR=30,PERCENTAGE=.9)
 np.save(dataRootPath+'/grid.npy',data)
-'''
 
+'''
 D = np.vstack([ np.hstack([d.x0.T,d.U[:1,:],np.matrix(d.cost)]) for d in data])
 
 plt.subplot(2,2,1)
@@ -920,99 +942,5 @@ plt.subplot(2,2,3)
 plt.scatter(D[:,0].flat,D[:,1].flat,c=D[:,4].flat,s=70,alpha=.8,linewidths=0)
 plt.subplot(2,2,4)
 plt.scatter(D[:,0].flat,D[:,1].flat,c=D[:,5].flat,s=70,alpha=.8,linewidths=0)
-
-# m,M = min(D[:,-1]),max(D[:,-1])
-# plt.subplot(2,2,2)
-# plt.scatter(Dold[:,0].flat,Dold[:,1].flat,c=Dold[:,-1].flat,s=70,alpha=.8,linewidths=0,vmin=m,vmax=M)
-# plt.subplot(2,2,3)
-# plt.scatter(D[idxdiff,0].flat,D[idxdiff,1].flat,c=diff[idxdiff].flat,s=70,alpha=.8,linewidths=0,vmin=m,vmax=M)
-# plt.subplot(2,2,4)
-# plt.plot(sorted(D[:,-1]))
-# plt.plot(sorted(Dold[:,-1]))
 plt.colorbar()
-
-
-
-
-#plt.clf()
-#plt.scatter((D[:N,0]%PPI).flat,(D[:N,1]%PPI).flat,c=D[:N,-1].flat,s=250,alpha=.99,linewidths=0)
-
-
-#x0=np.matrix([np.pi,np.pi,0,0]).T
-
-
-# def check(x0 = None):
-
-# x0 = env.reset()
-
-# for i,x in enumerate(graph.x): graph.plotNode(i,'r+',markeredgewidth=3)
-# idx = nearestNeighbor(x0,graph.x,1)[0]
-# graph.plotNode(idx,'g+',markeredgewidth=10)
-# plt.plot(x0[0],x0[1],'k+',markeredgewidth=10)
-
-# plt.draw()
-# optpolicy(x0)
-# plt.draw()
-
-# graph.x[idx] *= 1000
-# idx1 = nearestNeighbor(x0,graph.x,1)[0]
-# graph.plotNode(idx1,'g+',markeredgewidth=10)
-# plt.draw()
-# optpolicy(x0)
-
-
-
-def dggrid(x0,nbpoint=5):
-     
-     NQ = 2
-     PI = np.pi
-     PPI = 2*PI
-
-     colors = ['r','g','b','y','c',]+['k',]*nbpoint
-     
-     r=0
-     for idx in nearestNeighbor(x0,graph.x,nbpoint):
-          xnear = graph.x[idx]
-          dq = ((x0-xnear)[:NQ]+PI)%PPI - PI
-          x0[:NQ] = xnear[:NQ]+dq
-
-          X,U,times = pathFrom(idx)
-          ttime = times[-1]
-
-          np.savetxt(acado.options['istate'],   np.vstack([times/ttime,X.T]).T )
-          np.savetxt(acado.options['icontrol'], np.vstack([times/ttime,U.T]).T )
-          acado.options['horizon'] = ttime
-          acado.options['Tmax'] = 40*ttime
-
-          x1 = X[-1,:].T
-
-          acado.iter = 800
-          acado.options['steps'] = 20
-          acado.debug(False)
-          try:
-               acado.run( x0,x1,autoInit=False)
-          except:
-               plt.plot(X[:,0]-X[-1,0],X[:,1]-X[-1,0],'k:', linewidth=.5)
-               continue
-
-          Xac = acado.states()
-          Uac = acado.controls()
-
-          plt.plot(X  [:,0]-Xac[-1,0],X  [:,1]-Xac[-1,1],colors[r]+':', linewidth=2)
-          plt.plot(Xac[:,0]-Xac[-1,0],Xac[:,1]-Xac[-1,1],colors[r], linewidth=2)
-          plt.draw()
-          print '%d(%c):'%(r,colors[r]),acado.opttime()
-          r+=1
-
-
-
-
-# for i2 in np.arange(-np.pi,np.pi,.1):
-#      for i1 in np.arange(-np.pi,np.pi,.1):
-#           x0 = np.matrix([i1,i2,0,0]).T
-#           if not [d.x0 for d in data if np.allclose(d.x0,x0,1e-3)]:
-#                print x0.T
-#                data.append( Data(x0=x0,X=[],cost=100000.,U=zero(2).T+1000,T=[]) )
- 
-# for i,d in enumerate(data):
-#     if not np.allclose(d.x0.T,d.X[0],1e-3): data[i] = Data(x0=d.x0,X=[],cost=100000.,U=zero(2).T,T=[])
+'''

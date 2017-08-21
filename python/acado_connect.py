@@ -7,13 +7,15 @@ from acado_runner import AcadoRunner
 
 class AcadoConnect(AcadoRunner):
      def __init__(self,path="/home/nmansard/src/pinocchio/pycado/build/unittest/connect_pendulum",
-                  model=None,data=None):
+                  model=None,data=None,datadir='/tmp/'):
           AcadoRunner.__init__(self,path)
           self.model = model
           if self.model is not None: self.data = model.createData()
-          self.options['istate']   ='/tmp/guess.stx'
-          self.options['icontrol'] = '/tmp/guess.ctl'
-          self.options['oparam'] = '/tmp/mpc.prm'
+          self.options['istate']   = datadir+'guess.stx'
+          self.options['icontrol'] = datadir+'guess.ctl'
+          self.options['ocontrol'] = datadir+'mpc.ctl'
+          self.options['ostate']   = datadir+'mpc.stx'
+          self.options['oparam']   = datadir+'mpc.prm'
           self.setDims()
 
      def setDims(self):
@@ -26,7 +28,7 @@ class AcadoConnect(AcadoRunner):
           self.options['Tmin'] = T0
           self.options['Tmax'] = T*4
 
-     def buildInitGuess(self,x0,x1):
+     def buildInitGuess(self,x0,x1,jobid=None):
           T      = self.options['horizon']
           NSTEPS = self.options['steps']
           DT     = T / NSTEPS
@@ -74,40 +76,66 @@ class AcadoConnect(AcadoRunner):
           # while horizon T is optimized, timescale should be rescaled between 0 and 1 
           # see http://acado.sourceforge.net/doc/html/d4/d29/example_002.html
           guessX = np.vstack([ np.arange(NSTEPS+1)/float(NSTEPS), X.T, zero(NSTEPS+1).T ]).T
-          np.savetxt(self.options['istate'],guessX)
+          np.savetxt(self.options['istate']+self.async_ext(jobid),guessX)
 
           if withControl:
                guessU = np.vstack([ np.arange(NSTEPS+1)/float(NSTEPS),   U.T ]).T
-               np.savetxt(self.options['icontrol'],guessU)
+               np.savetxt(self.options['icontrol']+self.async_ext(jobid),guessU)
 
           return X,U
 
      def run(self,x0,x1,autoInit=True):
-          self.options['finalpos'] = ' '.join([ '%.20f'%f for f in x1[:self.NQ].flat ])
-          self.options['finalvel'] = ' '.join([ '%.20f'%f for f in x1[self.NQ:].flat ])
           if autoInit:               self.buildInitGuess(x0,x1)
-          return AcadoRunner.run(self,x0[:self.NQ].flat,x0[self.NQ:].flat)
+          AcadoRunner.run(self,states={'init':  [ x0[:self.NQ].flat,x0[self.NQ:].flat ],
+                                       'final': [ x1[:self.NQ].flat,x1[self.NQ:].flat ] })
+          return self.checkResult(True,x0,x1)
 
-     def initrun(self,x0,x1,i=100,autoInit = True):
-          self.options['finalpos'] = ' '.join([ '%.20f'%f for f in x1[:self.NQ].flat ])
-          self.options['finalvel'] = ' '.join([ '%.20f'%f for f in x1[self.NQ:].flat ])
+     def checkResult(self,ret,x0=None,x1=None,jobid=None,threshold=1e-3):
+          if not ret: return False
+          if x0 is not None or x1 is not None: X = self.states(jobid)
+          if x0 is not None and norm(x0.T-X[ 0,:]) > threshold: return False
+          if x1 is not None and norm(x1.T-X[-1,:]) > threshold: return False
+          return True
+
+     def run_async(self,x0,x1,autoInit=True,additionalOptions=None,jobid=None):
+          if jobid is None: jobid = self.book_async()
+          if autoInit:               self.buildInitGuess(x0,x1,jobid=jobid)
+          return AcadoRunner.run_async(self,
+                                       states={'init':  [ x0[:self.NQ].flat,x0[self.NQ:].flat ],
+                                               'final': [ x1[:self.NQ].flat,x1[self.NQ:].flat ] },
+                                       additionalOptions=additionalOptions,
+                                       jobid = jobid)
+
+     def join(self,jobid,x1=None,x2=None,threshold=1e-3,**kwargs):
+          ret = AcadoRunner.join(self,jobid,*kwargs)
+          return self.checkResult(ret,x1,x2,jobid,threshold)
+          # if not ret: return False
+          # if x1 is not None or x2 is not None: X = self.states()
+          # if x1 is not None and norm(x1.T-X[0,:]) > self.threshold: return False
+          # if x2 is not None and norm(x2.T-X[-1,:]) > self.threshold: return False
+          # return True
+          
+     def initrun(self,x0,x1,iterations=100,autoInit = True):
           if autoInit:               self.buildInitGuess(x0,x1)
-          return AcadoRunner.run(self,x0[:self.NQ].flat,x0[self.NQ:].flat)
+          return AcadoRunner.initrun(self,
+                                     states={'init':  [ x0[:self.NQ].flat,x0[self.NQ:].flat ],
+                                             'final': [ x1[:self.NQ].flat,x1[self.NQ:].flat ] },
+                                     iterations=iterations)
 
      def rerun(self): return AcadoRunner.run(self)
 
-     def states(self):
+     def states(self,jobid=None):
          '''The problem is Mayer-based, hence the cost is not part of the state file.'''
-         return np.array(f2a(self.stateFile))[:,1:]
+         return np.array(f2a(self.options['ostate']+self.async_ext(jobid)))[:,1:]
 
-     def params(self):
-         return np.array(f2a(self.options['oparam']))[:,1:]
-     def times(self):
+     def params(self,jobid=None):
+         return np.array(f2a(self.options['oparam']+self.async_ext(jobid)))[:,1:]
+     def times(self,jobid=None):
           '''Return times of state and control samplings.'''
           N = self.options['steps']
-          return np.arange(0.,N+1)/N * self.opttime()
-     def opttime(self):
-          return self.params()[0,0]
+          return np.arange(0.,N+1)/N * self.opttime(jobid)
+     def opttime(self,jobid=None):
+          return self.params(jobid)[0,0]
      
 
 if __name__ == '__main__':
