@@ -9,7 +9,7 @@ from pendulum import Pendulum
 import matplotlib.pylab as plt
 from specpath import acadoPath,dataRootPath,acadoTxtPath
 
-RANDOM_SEED = 9 # int((time.time()%10)*1000)
+RANDOM_SEED = 999 # int((time.time()%10)*1000)
 print "Seed = %d" %  RANDOM_SEED
 np .random.seed     (RANDOM_SEED)
 random.seed         (RANDOM_SEED)
@@ -881,7 +881,7 @@ graph.load(dataRootPath)
 '''
 for i in range(5):
      simplePrm(20,10,10,True)
-     print 'Sleeping 10 ... it is time for a little CTRL-C '
+     print 'Sleeping 10 ... it is time for a little CTRL-C ',time.ctime()
      time.sleep(10)
 
 graph.save(dataRootPath+'_100pts')
@@ -891,7 +891,7 @@ env.vup[:] = 3.
 env.vlow[:] = -3.
 for i in range(5):
      simplePrm(10,50,50,False)
-     print 'Sleeping 10 ... it is time for a little CTRL-C '
+     print 'Sleeping 10 ... it is time for a little CTRL-C ',time.ctime()
      time.sleep(10)
 
 graph.save(dataRootPath+'_200pts')
@@ -904,14 +904,14 @@ env.vlow[:] = -.5
 prevSize = len(graph.x)
 for i in range(5):
      simplePrm(10,20,20,False)
-     print 'Sleeping 10 ... it is time for a little CTRL-C '
+     print 'Sleeping 10 ... it is time for a little CTRL-C ',time.ctime()
      time.sleep(10)
 
 graph.save(dataRootPath+'_400pts')
 
-print 'Connect all points to zero (at least tries)'
+print 'Connect all points to zero (at least tries)',time.ctime()
 connectToZero(graph)
-print 'Densify PRM'
+print 'Densify PRM',time.ctime()
 densifyPrm(graph)
 connexifyPrm(graph)
 
@@ -929,7 +929,10 @@ dataflat = np.load(dataRootPath+'/grid.npy')
 data=[]
 for i,d in enumerate(dataflat): data.append(Data(*d))
 '''
+print 'Generate the grid',time.ctime()
 data = gridPolicy()
+np.save(dataRootPath+'/grid_first.npy',data)
+print 'Refine the grid',time.ctime()
 refineGrid(data,10000,NNEIGHBOR=30,PERCENTAGE=.9)
 np.save(dataRootPath+'/grid.npy',data)
 
