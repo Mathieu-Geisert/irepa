@@ -43,7 +43,8 @@ int main(int argc, const char ** argv ){
     ("umax",       po::value<std::vector<double> >()->multitoken()
      ->default_value(std::vector<double>{10.,10.}, "10 10"),                     "Torque limit")
     ("shift,t",    po::value<int>()->default_value(0),                           "Number of time shifts")
-    ("armature",    po::value<double>()->default_value(0.),                         "Joint armature")
+    ("armature",   po::value<double>()->default_value(0.),                       "Joint armature")
+    ("jobid",      po::value<std::string>()->default_value(""),                  "Job id, to be added to filename")
     ("statefromfile,f", "Init state from file")
     ;
 
@@ -68,9 +69,14 @@ int main(int argc, const char ** argv ){
   const int & a_shift= vm["shift"].as<int>();
   std::vector<double> a_p0,a_p1,a_v0,a_v1,a_umax,a_K;
   const bool a_withPlot = vm.count("plot")!=0;
-  const std::string & a_guessCFile = vm["icontrol"].as<std::string>();
-  const std::string & a_guessSFile = vm["istate"].as<std::string>();
   const double & a_armature = vm["armature"].as<double>();
+
+  const std::string & a_jobid = vm["jobid"].as<std::string>();
+  const std::string a_guessCFile = vm["icontrol"].as<std::string>() + a_jobid;
+  const std::string a_guessSFile = vm["istate"].as<std::string>() + a_jobid;
+  const std::string a_outputCFile = vm["ocontrol"].as<std::string>() + a_jobid;
+  const std::string a_outputSFile = vm["ostate"].as<std::string>() + a_jobid;
+  const std::string a_outputPFile = vm["oparam"].as<std::string>() + a_jobid;
 
   VariablesGrid Us,Xs;
 
@@ -91,18 +97,27 @@ int main(int argc, const char ** argv ){
       a_p0.resize(2);
       a_v0 = vm["initvel"].as< std::vector<double> >();
       a_v0.resize(2);
+      a_p1 = vm["finalpos"].as< std::vector<double> >();
+      a_p1.resize(2);
+      a_v1 = vm["finalvel"].as< std::vector<double> >();
+      a_v1.resize(2);
     }
   else // Init config from state file.
     {
       std::cout << "Auto init pos = " << Xs(0,0) << ", " << Xs(0,1) << std::endl;
-      a_p0.resize(2); a_p0[0] = Xs(0,0);
-      a_v0.resize(2); a_v0[0] = Xs(0,1);
+      a_p0.resize(2); a_p0[0] = Xs(0,0); a_p0[1] = Xs(0,1);
+      a_v0.resize(2); a_v0[0] = Xs(0,2); a_v0[1] = Xs(0,3);
+
+      std::cout << "Num point ="<< Xs.getNumPoints() << std::endl;
+      uint nbp = Xs.getNumPoints();
+
+      a_p1.resize(2); a_p1[0] = Xs(nbp-1,0); a_p1[1] = Xs(nbp-1,1);
+      a_v1.resize(2); a_v1[0] = Xs(nbp-1,2); a_v1[1] = Xs(nbp-1,3);
+
+      std::cout << a_p0 << " " << a_v0 << " " << a_p1 << " " << a_v1 << std::endl;
+
     }
 
-  a_p1 = vm["finalpos"].as< std::vector<double> >();
-  a_p1.resize(2);
-  a_v1 = vm["finalvel"].as< std::vector<double> >();
-  a_v1.resize(2);
   a_umax = vm["umax"].as< std::vector<double> >();
   a_umax.resize(2);
   a_K = vm["friction"].as< std::vector<double> >();
@@ -201,19 +216,19 @@ int main(int argc, const char ** argv ){
   {
     VariablesGrid Us;
     algorithm.getControls( Us );
-    std::ofstream of(vm["ocontrol"  ].as<std::string>().c_str());
+    std::ofstream of(a_outputCFile.c_str());
     Us.print( of,"","","\n",10,10,"\t","\n");
   }
   {
     VariablesGrid Xs;
     algorithm.getDifferentialStates( Xs );
-    std::ofstream of(vm["ostate"  ].as<std::string>().c_str());
+    std::ofstream of(a_outputSFile.c_str());
     Xs.print( of,"","","\n",10,10,"\t","\n");
   }
   {
     VariablesGrid Ps;
     algorithm.getParameters( Ps );
-    std::ofstream of(vm["oparam"  ].as<std::string>().c_str());
+    std::ofstream of(a_outputPFile.c_str());
     Ps.print( of,"","","\n",10,10,"\t","\n");
   }
 
