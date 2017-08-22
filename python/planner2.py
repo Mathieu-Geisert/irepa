@@ -15,7 +15,7 @@ np .random.seed     (RANDOM_SEED)
 random.seed         (RANDOM_SEED)
 
 #env                 = Pendulum(2,withDisplay=True)       # Continuous pendulum
-env                 = Pendulum(2,length=.5,mass=3.0,armature=.2,withDisplay=False)
+env                 = Pendulum(2,length=.5,mass=3.0,armature=.2,withDisplay=True)
 env.withSinCos      = False             # State is dim-3: (cosq,sinq,qdot) ...
 NX                  = env.nobs          # ... training converges with q,qdot with 2x more neurones.
 NU                  = env.nu            # Control is dim-1: joint torque
@@ -28,7 +28,7 @@ env.DT              = 0.15
 env.NDT             = 1
 #env.umax            = 15.
 #env.umax            = (15.,15.)
-env.umax            = (5.,10.)
+env.umax            = np.matrix([5.,10.]).T
 NSTEPS              = 32
 
 env.qlow[1] = -np.pi
@@ -278,7 +278,7 @@ class ConnectAcado:
           acado.options['friction'] = \
               "{0:f} {1:f}".format([env.Kf,]*2) if isinstance(env.Kf,float) \
               else  "{0:f} {1:f}".format(*env.Kf.diagonal())
-          acado.options['umax']     = "%.2f %.2f" % env.umax
+          acado.options['umax']     = "%.2f %.2f" % tuple([x for x in env.umax])
           acado.options['armature'] = env.armature
           acado.setTimeInterval(1.5)
 
@@ -454,8 +454,9 @@ from astar import astar
 def pathFrom(idx,idx2=0):
 
      if idx2 not in graph.descendants(idx):
-          print idx2," not in descendance of idx:",graph.descendants(idx)
-          raise graph.descendants(idx)
+          #print idx2," not in descendance of idx:",graph.descendants(idx)
+          raise Exception("%d not in descendance of %d:"%(idx2,idx))
+          #graph.descendants(idx)
 
      traj = astar(graph,idx,idx2)
      prev = traj[0]
@@ -614,17 +615,18 @@ def optpolicy(x0 = None, nbpoint = 1, nbcorrect = 1, withPlot = False):
      # acado.iter=5
 
      jobs = {}
-     for idx in nearestNeighbor(x0,graph.x,nbpoint):
+     for idx in nearestNeighbor(x0,graph.x,nbpoint*2):
           #print "Try from ",idx,time.time()-t0
-          jobid = acado.book_async()
 
           xnear = graph.x[idx]
           dq = ((x0-xnear)[:NQ]+PI)%PPI - PI
           x0[:NQ] = xnear[:NQ]+dq
 
-          X,U,times = pathFrom(idx)
+          try:               X,U,times = pathFrom(idx)
+          except:            continue
           ttime = times[-1]
 
+          jobid = acado.book_async()
           np.savetxt(acado.options['istate']+acado.async_ext(jobid),   np.vstack([times/ttime,X.T]).T )
           np.savetxt(acado.options['icontrol']+acado.async_ext(jobid), np.vstack([times/ttime,U.T]).T )
 
@@ -636,6 +638,9 @@ def optpolicy(x0 = None, nbpoint = 1, nbcorrect = 1, withPlot = False):
 
           if withPlot:
                plt.plot(X[:,0],X[:,1],'g', linewidth=2)
+               plt.draw()
+
+          if len(jobs)==nbpoint: break
 
      for jobid,[x0,x1] in jobs.items():
           #print "Join ",jobid,time.time()-t0
@@ -876,7 +881,6 @@ connect.acado.setTimeInterval(1.)
 acado=connect.acado
 acado.options['printlevel']=1
 
-'''
 graph.load(dataRootPath)
 '''
 for i in range(5):
@@ -908,10 +912,35 @@ for i in range(5):
      time.sleep(10)
 
 graph.save(dataRootPath+'_400pts')
+'''
 
+### Filling the prm with additional points close to joint limit.
+env.qlow = np.matrix([-5, -np.pi])
+env.qup  = np.matrix([ 5, -.6*np.pi])
+env.vlow[:] = -.5
+env.vup[:] = .5
+prevSize = len(graph.x)
+for i in range(5):
+     simplePrm(10,20,20,False)
+     print 'Sleeping 10 ... it is time for a little CTRL-C ',time.ctime()
+     time.sleep(10)
+
+env.qlow = np.matrix([-5,  .6*np.pi])
+env.qup  = np.matrix([ 5,     np.pi])
+env.vlow[:] = -.5
+env.vup[:] = .5
+prevSize = len(graph.x)
+for i in range(5):
+     simplePrm(10,20,20,False)
+     print 'Sleeping 10 ... it is time for a little CTRL-C ',time.ctime()
+     time.sleep(10)
+
+'''
 print 'Connect all points to zero (at least tries)',time.ctime()
 connectToZero(graph)
 print 'Densify PRM',time.ctime()
+'''
+
 densifyPrm(graph)
 connexifyPrm(graph)
 
@@ -933,7 +962,7 @@ print 'Generate the grid',time.ctime()
 data = gridPolicy()
 np.save(dataRootPath+'/grid_first.npy',data)
 print 'Refine the grid',time.ctime()
-refineGrid(data,10000,NNEIGHBOR=30,PERCENTAGE=.9)
+refineGrid(data,5000,NNEIGHBOR=30,PERCENTAGE=.9)
 np.save(dataRootPath+'/grid.npy',data)
 
 '''
