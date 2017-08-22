@@ -16,8 +16,6 @@ from pinocchio.utils import *
 from pinocchio.explog import exp,log
 from numpy.linalg import pinv,norm
 import pinocchio as se3
-import gepetto.corbaserver
-from display import Display
 from numpy.linalg import pinv,norm,inv
 import time
 
@@ -58,7 +56,8 @@ class Pendulum:
         <length> and <mass> should be double values.
         <armature> should be none, a double or a flat vector 1xNV containing joint armatures.
         '''
-        self.viewer     = Display() if withDisplay else None
+        self.initDisplay(withDisplay)
+        
         self.visuals    = []
         self.model      = se3.Model.BuildEmptyModel()
         self.length     = length
@@ -82,6 +81,13 @@ class Pendulum:
         self.vup        = np.matrix([+self.vmax,]*nbJoint).T
 
         self.modulo     = True
+
+    def initDisplay(self,withDisplay=True):
+        if withDisplay:
+            from display import Display
+            self.viewer     = Display()
+        else:
+            self.viewer = None
 
     def createPendulum(self,nbJoint,rootId=0,prefix='',jointPlacement=None):
         color   = [red,green,blue,transparency] = [1,1,0.78,1.0]
