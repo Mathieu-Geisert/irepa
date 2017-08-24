@@ -115,6 +115,7 @@ INCLUDE_DIRECTORIES(${Boost_INCLUDE_DIRS})
 
 SET(HEADERS
   pycado.hpp
+  utils.hpp
   )
 
 MAKE_DIRECTORY("${${PROJECT_NAME}_BINARY_DIR}/include/pycado")
