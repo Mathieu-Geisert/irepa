@@ -615,7 +615,7 @@ def optpolicy(x0 = None, nbpoint = 1, nbcorrect = 1, withPlot = False):
      # acado.iter=5
 
      jobs = {}
-     for idx in nearestNeighbor(x0,graph.x,nbpoint*2):
+     for idx in nearestNeighbor(x0,graph.x,nbpoint*2,fullSort=True):
           #print "Try from ",idx,time.time()-t0
 
           xnear = graph.x[idx]
@@ -643,7 +643,6 @@ def optpolicy(x0 = None, nbpoint = 1, nbcorrect = 1, withPlot = False):
           if len(jobs)==nbpoint: break
 
      for jobid,[x0,x1] in jobs.items():
-          #print "Join ",jobid,time.time()-t0
           if acado.join(jobid,x0,x1): 
                Xac = acado.states(jobid)
                Uac = acado.controls(jobid)
@@ -787,7 +786,7 @@ def refineGrid(data,NTRIAL=1000,NNEIGHBOR=8,RANDQUEUE=[],PERCENTAGE=.95):
           idx0 = RANDQUEUE.pop() if len(RANDQUEUE)>0 else random.randint(0,len(data)-1)
           d0 = data[idx0]
           x0 = d0.x0
-          #print "Trial #",trial,idx0,x0[:2].T
+          print "Trial #",trial,idx0,x0[:2].T
           
           jobs = {}
           for idx2 in nearestNeighbor(x0, [ d.x0 for d in data ],NNEIGHBOR+1,fullSort=True ):
@@ -949,7 +948,7 @@ graph.save(dataRootPath)
 
 ### Generate the grid ##########################################################
 
-RANDOM_SEED =  int((time.time()%10)*1000)
+RANDOM_SEED =  345#int((time.time()%10)*1000)
 print "Seed = %d" %  RANDOM_SEED
 np .random.seed     (RANDOM_SEED)
 random.seed         (RANDOM_SEED)
@@ -976,7 +975,6 @@ np.save(dataRootPath+'/grid.npy',data)
 refineGrid(data,5000,NNEIGHBOR=20,PERCENTAGE=1.1)
 np.save(dataRootPath+'/grid.npy',data)
 
-'''
 D = np.vstack([ np.hstack([d.x0.T,d.U[:1,:],np.matrix(d.cost)]) for d in data])
 
 plt.subplot(2,2,1)
