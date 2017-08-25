@@ -3,147 +3,42 @@
  */
 
 #include <acado_toolkit.hpp>
-#include <acado_gnuplot.hpp>
+#include "pycado/utils.hpp"
 
-#include <boost/program_options.hpp>
-namespace po = boost::program_options;
-
-
-
-int main(int argc, const char ** argv ){
-
+int main(int argc, const char ** argv )
+{
   USING_NAMESPACE_ACADO;
+  Timer timer;
 
   /* --- OPTIONS ----------------------------------------------------------------------------- */
   /* --- OPTIONS ----------------------------------------------------------------------------- */
   /* --- OPTIONS ----------------------------------------------------------------------------- */
-  po::options_description desc("Allowed options");
-  desc.add_options()
-    ("help,h",     "produce help message")
-    ("plot",       "with plots")
-    ("ostate,s",   po::value<std::string>()->default_value("/tmp/states.txt") , "Output states"  )
-    ("oparam",     po::value<std::string>()->default_value("/tmp/params.txt") , "Output parameters"  )
-    ("ocontrol,c", po::value<std::string>()->default_value("/tmp/control.txt"), "Output controls")
-    ("icontrol,i", po::value<std::string>()->default_value(""),                 "Input controls (guess)")
-    ("istate,j",   po::value<std::string>()->default_value(""),                 "Input states (guess)")
-    ("horizon,T",  po::value<double     >()->default_value(1.0),                "Horizon length")
-    ("Tmin",       po::value<double     >()->default_value(2.0),                "Horizon length minimal")
-    ("Tmax",       po::value<double     >()->default_value(0.1),                "Horizon length maximal")
-    ("friction",   po::value<std::vector<double> >()->multitoken()
-     ->default_value(std::vector<double>{0.,0.}, "0. 0."),                      "Friction coeff")
-    //("friction,K", po::value<double     >()->default_value(0.0),                "Friction coeff")
-    ("decay,a",    po::value<double     >()->default_value(1.0),                "Cost decay rate")
-    ("iter,N",     po::value<int        >()->default_value(100),                "Number of optim iterations")
-    ("steps,d",    po::value<int        >()->default_value(20),                 "Discretization")
-    ("printlevel", po::value<int        >()->default_value(0),                  "ACADO print level")
-    ("initpos",    po::value<std::vector<double> >()->multitoken(),             "Initial position")
-    ("initvel",    po::value<std::vector<double> >()->multitoken(),             "Initial velocity")
-    ("finalpos",   po::value<std::vector<double> >()->multitoken(),             "Terminal position")
-    ("finalvel",   po::value<std::vector<double> >()->multitoken(),             "Terminal velocity")
-    ("umax",       po::value<std::vector<double> >()->multitoken()
-     ->default_value(std::vector<double>{10.,10.}, "10 10"),                     "Torque limit")
-    ("shift,t",    po::value<int>()->default_value(0),                           "Number of time shifts")
-    ("armature",   po::value<double>()->default_value(0.),                       "Joint armature")
-    ("jobid",      po::value<std::string>()->default_value(""),                  "Job id, to be added to filename")
-    ("statefromfile,f", "Init state from file")
-    ;
-
-  po::variables_map vm;
-  po::store(po::parse_command_line(argc, argv, desc,
-                                   po::command_line_style::unix_style 
-                                   ^ po::command_line_style::allow_short), vm);
-  po::notify(vm);    
-  
-  if (vm.count("help")) {
-    std::cout << desc << "\n";
-    return 1;
-  }
-
-  const double & a_T = vm["horizon"].as<double>();
-  const double & a_Tmin = vm["Tmin"].as<double>();
-  const double & a_Tmax = vm["Tmax"].as<double>();
-  //  const double & a_K = vm["friction"].as<double>();
-  const double & a_decay = vm["decay"].as<double>();
-  const int & a_d    = vm["steps"].as<int>();
-  const int & a_N    = vm["iter"].as<int>();
-  const int & a_shift= vm["shift"].as<int>();
-  std::vector<double> a_p0,a_p1,a_v0,a_v1,a_umax,a_K;
-  const bool a_withPlot = vm.count("plot")!=0;
-  const double & a_armature = vm["armature"].as<double>();
-
-  const std::string & a_jobid = vm["jobid"].as<std::string>();
-  const std::string a_guessCFile = vm["icontrol"].as<std::string>() + a_jobid;
-  const std::string a_guessSFile = vm["istate"].as<std::string>() + a_jobid;
-  const std::string a_outputCFile = vm["ocontrol"].as<std::string>() + a_jobid;
-  const std::string a_outputSFile = vm["ostate"].as<std::string>() + a_jobid;
-  const std::string a_outputPFile = vm["oparam"].as<std::string>() + a_jobid;
-
-  VariablesGrid Us,Xs;
-
-  if(a_guessCFile.size()>0)
-    {
-      Us.read(a_guessCFile.c_str());
-      for(int loop=0;loop<a_shift;++loop) Us.shiftBackwards();
-    }
-  if(a_guessSFile.size()>0)
-    {
-      Xs.read(a_guessSFile.c_str());
-      for(int loop=0;loop<a_shift;++loop) Xs.shiftBackwards();
-    }
-
-  if (vm.count("statefromfile")==0) // Init config explicit from option.
-    {
-      a_p0 = vm["initpos"].as< std::vector<double> >();
-      a_p0.resize(2);
-      a_v0 = vm["initvel"].as< std::vector<double> >();
-      a_v0.resize(2);
-      a_p1 = vm["finalpos"].as< std::vector<double> >();
-      a_p1.resize(2);
-      a_v1 = vm["finalvel"].as< std::vector<double> >();
-      a_v1.resize(2);
-    }
-  else // Init config from state file.
-    {
-      std::cout << "Auto init pos = " << Xs(0,0) << ", " << Xs(0,1) << std::endl;
-      a_p0.resize(2); a_p0[0] = Xs(0,0); a_p0[1] = Xs(0,1);
-      a_v0.resize(2); a_v0[0] = Xs(0,2); a_v0[1] = Xs(0,3);
-
-      std::cout << "Num point ="<< Xs.getNumPoints() << std::endl;
-      uint nbp = Xs.getNumPoints();
-
-      a_p1.resize(2); a_p1[0] = Xs(nbp-1,0); a_p1[1] = Xs(nbp-1,1);
-      a_v1.resize(2); a_v1[0] = Xs(nbp-1,2); a_v1[1] = Xs(nbp-1,3);
-
-      std::cout << a_p0 << " " << a_v0 << " " << a_p1 << " " << a_v1 << std::endl;
-
-    }
-
-  a_umax = vm["umax"].as< std::vector<double> >();
-  a_umax.resize(2);
-  a_K = vm["friction"].as< std::vector<double> >();
-  a_K.resize(2);
-
+  OptionsOCP opts; opts.parse(argc,argv);
+  opts.NQ = 2; opts.NV = 2;
+  assert( opts.friction().size() == 2);
+  assert( opts.umax()    .size() == 2);
 
   /* --- OCP ----------------------------------------------------------------------------- */
   /* --- OCP ----------------------------------------------------------------------------- */
   /* --- OCP ----------------------------------------------------------------------------- */
 
   /// Pendulum hyperparameters
-  const double p  =   .5;    // lever arm
-  const double m  =  3. ;    // mass
-  const double a  =  2. ;    // armature
-  const double g  = 9.81;    // gravity constant
-  const double Kf0 = a_K[0], Kf1 = a_K[1];     // friction coeff
-  const double DT = a_T/a_d; // integration time
-  const double U0MAX = a_umax[0], U1MAX = a_umax[1];
+
+  const double p     =   .5 ;    // lever arm
+  const double m     =  3.  ;    // mass
+  const double a     =  2.  ;    // armature
+  const double g     =  9.81;    // gravity constant
+  const double Kf0   = opts.friction()[0], Kf1 = opts.friction()[1];     // friction coeff
+  const double DT    = opts.T()/opts.steps(); // integration time
+  const double umax0 = opts.umax()[0], umax1 = opts.umax()[1];
 
   DifferentialState        q0,q1,vq0,vq1;
   Control                  u0,u1  ;       // the control input u = a + b*t + .5*c*t*t
   Parameter                T;
   DifferentialEquation     f( 0.0, T );   // the differential equation
 
-  //  -------------------------------------
-  OCP ocp( 0.0, T, a_d );                        // time horizon of the OCP: [0,T]
+  //  --- SETUP OCP -----------------------
+  OCP ocp( 0.0, T, opts.steps() );                        // time horizon of the OCP: [0,T]
   ocp.minimizeMayerTerm( T );
 
   IntermediateState nM = (16*a*a + 16*a*m*p*p*cos(q1) + 28*a*m*p*p 
@@ -164,75 +59,40 @@ int main(int argc, const char ** argv ){
   f << dot(q1)  == vq1;
   f << dot(vq1) == Mi01*tau0 + Mi11*tau1;
 
-  ocp.subjectTo( f                   );
+  ocp.subjectTo( f );
 
-  ocp.subjectTo( AT_START,  q0  ==  a_p0[0] );
-  ocp.subjectTo( AT_START,  vq0 ==  a_v0[0] );
-  ocp.subjectTo( AT_START,  q1  ==  a_p0[1] );
-  ocp.subjectTo( AT_START,  vq1 ==  a_v0[1] );
+  ocp.subjectTo( AT_START,  q0  ==  opts.configInit()[0] );
+  ocp.subjectTo( AT_START,  vq0 ==  opts.velInit   ()[0] );
+  ocp.subjectTo( AT_START,  q1  ==  opts.configInit()[1] );
+  ocp.subjectTo( AT_START,  vq1 ==  opts.velInit   ()[1] );
 
-  ocp.subjectTo( AT_END,    q0  ==  a_p1[0] );
-  ocp.subjectTo( AT_END,    vq0 ==  a_v1[0] );
-  ocp.subjectTo( AT_END,    q1  ==  a_p1[1] );
-  ocp.subjectTo( AT_END,    vq1 ==  a_v1[1] );
+  ocp.subjectTo( AT_END,    q0  ==  opts.configFinal()[0] );
+  ocp.subjectTo( AT_END,    vq0 ==  opts.velFinal()   [0] );
+  ocp.subjectTo( AT_END,    q1  ==  opts.configFinal()[1] );
+  ocp.subjectTo( AT_END,    vq1 ==  opts.velFinal()   [1] );
 
-  ocp.subjectTo(  a_Tmin <= T <= a_Tmax  );
-  ocp.subjectTo( -U0MAX  <= u0 <=  U0MAX   );
-  ocp.subjectTo( -U1MAX  <= u1 <=  U1MAX   );
+  ocp.subjectTo( -opts.umax()[0]  <= u0 <=  opts.umax()[0]   );
+  ocp.subjectTo( -opts.umax()[1]  <= u1 <=  opts.umax()[1]   );
+
+  ocp.subjectTo(  opts.Tmin()     <= T  <= opts.Tmax()       );
 
   ocp.subjectTo( -M_PI  <= q1 <=  M_PI   );
 
-  //  -------------------------------------
+  //  --- SETUP SOLVER --------------------
 
-  OptimizationAlgorithm algorithm(ocp);     // the optimization algorithm
+  OptimizationAlgorithm algorithm(ocp);
 
-  if( a_withPlot )
-    {
-      GnuplotWindow window;
-      window.addSubplot( q0, "Angle q0"      );
-      window.addSubplot( q1, "Angle q1"      );
-      window.addSubplot( u0, "Control u0" );
-      window.addSubplot( u1, "Control u1" );
-      algorithm << window;
-    }
+  setupPlots(algorithm,opts,q0,q1,u0,u1);
+  initControlAndState(algorithm,opts);
+  initHorizon(algorithm,opts);
+  initAlgorithmStandardParameters(algorithm,opts);
 
-  algorithm.initializeControls(Us);
-  algorithm.initializeDifferentialStates(Xs);
+  returnValue retval = algorithm.solve();
 
-  {
-    Grid timeGrid( 0.0, 1.0, a_d );
-    VariablesGrid   Ps( 1, timeGrid );
-    Ps(0,0) = a_T;
-    algorithm.initializeParameters(Ps);
-  }
+  outputControlAndState(algorithm,opts);
+  outputParameters(algorithm,opts);
 
-  algorithm.set( PRINTLEVEL, vm["printlevel"].as<int>());
-  algorithm.set( PRINT_COPYRIGHT, 0);
-  algorithm.set( INTEGRATOR_TYPE,INT_RK45);
-  algorithm.set( MAX_NUM_ITERATIONS, a_N);
-
-  returnValue retval = algorithm.solve();                        // solves the problem.
-
-  {
-    VariablesGrid Us;
-    algorithm.getControls( Us );
-    std::ofstream of(a_outputCFile.c_str());
-    Us.print( of,"","","\n",10,10,"\t","\n");
-  }
-  {
-    VariablesGrid Xs;
-    algorithm.getDifferentialStates( Xs );
-    std::ofstream of(a_outputSFile.c_str());
-    Xs.print( of,"","","\n",10,10,"\t","\n");
-  }
-  {
-    VariablesGrid Ps;
-    algorithm.getParameters( Ps );
-    std::ofstream of(a_outputPFile.c_str());
-    Ps.print( of,"","","\n",10,10,"\t","\n");
-  }
-
-  
-  std::cout << "RETURN CODE ["<<int(retval)<<"] "<< retval<<std::endl << "--" << std::endl; 
+  //  --- RETURN --------------------------
+  std::cout << "###### Return["<<int(retval)<<"] JobID=" << opts.jobid() << timer << std::endl;
   return (int)retval;
 }
