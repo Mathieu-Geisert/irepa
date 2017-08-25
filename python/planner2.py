@@ -15,7 +15,7 @@ np .random.seed     (RANDOM_SEED)
 random.seed         (RANDOM_SEED)
 
 #env                 = Pendulum(2,withDisplay=True)       # Continuous pendulum
-env                 = Pendulum(2,length=.5,mass=3.0,armature=.2,withDisplay=True)
+env                 = Pendulum(2,length=.5,mass=3.0,armature=.2,withDisplay=False)
 env.withSinCos      = False             # State is dim-3: (cosq,sinq,qdot) ...
 NX                  = env.nobs          # ... training converges with q,qdot with 2x more neurones.
 NU                  = env.nu            # Control is dim-1: joint torque
@@ -697,8 +697,9 @@ def playFromCursor():
 from collections import namedtuple
 Data = namedtuple('Data', [ 'x0', 'X', 'cost', 'U', 'T' ])
 
-def gridPolicy(step=.1):
-     data = []
+def gridPolicy(step=.1,data=None):
+     checkifexist = data is not None
+     if data is None: data = []
      trial = 0
      #shuffle = lambda l: random.sample(l,len(l))
      shuffle = lambda l:l
@@ -708,7 +709,10 @@ def gridPolicy(step=.1):
                print 'Traj #',trial
                try:
                     x0 = np.matrix([i1,i2,0,0]).T
-                    cost,X,U,T = optpolicy(x0,nbpoint=10,nbcorrect=1,withPlot=False)
+                    if checkifexist and len([ True for d in data if np.allclose(d.x0,x0) ])>0:
+                         print '\t...already done'
+                         continue
+                    cost,X,U,T = optpolicy(x0,nbpoint=16,nbcorrect=1,withPlot=False)
                     data.append( Data(x0=x0,X=X,cost=cost,U=U,T=T) )
                except:
                     print 'Failure at #',trial
@@ -772,6 +776,7 @@ def gridPolicy(step=.1):
 #                     break
 
 def refineGrid(data,NTRIAL=1000,NNEIGHBOR=8,RANDQUEUE=[],PERCENTAGE=.95):
+     if NTRIAL<0: NTRIAL = len(RANDQUEUE)
      NQ = env.model.nq;   PI = np.pi;    PPI = 2*PI
      if 'horizon' in acado.options: del acado.options['horizon']
      if 'Tmax'    in acado.options: del acado.options['Tmax']
@@ -806,9 +811,9 @@ def refineGrid(data,NTRIAL=1000,NNEIGHBOR=8,RANDQUEUE=[],PERCENTAGE=.95):
 
                acado.run_async(x0mod,x1,autoInit=False,jobid=jobid,
                                additionalOptions= ' --horizon=%.10f --Tmax=%.10f' % (ttime,2*ttime))
-               jobs[jobid] = [x0mod,x1]
+               jobs[jobid] = [x0mod,x1,idx2]
      
-          for jobid,[x0mod,x1] in jobs.items():
+          for jobid,[x0mod,x1,idx2] in jobs.items():
                if acado.join(jobid,x0,x1):
                     if acado.opttime(jobid)<d0.cost:
                          data[idx0] = Data( x0  = x0, 
@@ -816,9 +821,8 @@ def refineGrid(data,NTRIAL=1000,NNEIGHBOR=8,RANDQUEUE=[],PERCENTAGE=.95):
                                             U   = acado.controls(jobid), 
                                             T   = acado.times   (jobid),
                                             cost= acado.opttime (jobid) )
-                    print "#%4d: %4d is best from %4d" %(trial,idx0,idx2),"\t(%.3f vs %.3f)"%(acado.opttime(jobid),d0.cost)
-                    break
-
+                         print "#%4d: %4d is best from %4d" %(trial,idx0,idx2),"\t(%.3f vs %.3f)"%(acado.opttime(jobid),d0.cost)
+                         d0 = data[idx0]
 
 def densifyPrm(graph,NTRIAL=1000,PAUSEFREQ=50):
      # trial = 0
@@ -912,11 +916,10 @@ for i in range(5):
      time.sleep(10)
 
 graph.save(dataRootPath+'_400pts')
-'''
 
 ### Filling the prm with additional points close to joint limit.
-env.qlow = np.matrix([-5, -np.pi])
-env.qup  = np.matrix([ 5, -.6*np.pi])
+env.qlow = np.matrix([-5, -np.pi]).T
+env.qup  = np.matrix([ 5, -.6*np.pi]).T
 env.vlow[:] = -.5
 env.vup[:] = .5
 prevSize = len(graph.x)
@@ -925,8 +928,8 @@ for i in range(5):
      print 'Sleeping 10 ... it is time for a little CTRL-C ',time.ctime()
      time.sleep(10)
 
-env.qlow = np.matrix([-5,  .6*np.pi])
-env.qup  = np.matrix([ 5,     np.pi])
+env.qlow = np.matrix([-5,  .6*np.pi]).T
+env.qup  = np.matrix([ 5,     np.pi]).T
 env.vlow[:] = -.5
 env.vup[:] = .5
 prevSize = len(graph.x)
@@ -935,16 +938,14 @@ for i in range(5):
      print 'Sleeping 10 ... it is time for a little CTRL-C ',time.ctime()
      time.sleep(10)
 
-'''
 print 'Connect all points to zero (at least tries)',time.ctime()
 connectToZero(graph)
 print 'Densify PRM',time.ctime()
-'''
-
 densifyPrm(graph)
 connexifyPrm(graph)
 
 graph.save(dataRootPath)
+'''
 
 ### Generate the grid ##########################################################
 
@@ -953,16 +954,26 @@ print "Seed = %d" %  RANDOM_SEED
 np .random.seed     (RANDOM_SEED)
 random.seed         (RANDOM_SEED)
 
-'''
 dataflat = np.load(dataRootPath+'/grid.npy')
 data=[]
 for i,d in enumerate(dataflat): data.append(Data(*d))
-'''
-print 'Generate the grid',time.ctime()
-data = gridPolicy()
-np.save(dataRootPath+'/grid_first.npy',data)
+
+# print 'Generate the grid',time.ctime()
+# data = gridPolicy(.5,data)
+# np.save(dataRootPath+'/grid_first.npy',data)
+# print 'Fill the grid',time.ctime()
+# refineGrid(data,NNEIGHBOR=30,PERCENTAGE=.9, 
+#            RANDQUEUE=[ i for i,d in enumerate(data) if d.cost>100])
+# refineGrid(data,NNEIGHBOR=100,PERCENTAGE=.9, 
+#            RANDQUEUE=[ i for i,d in enumerate(data) if d.cost>100])
+# np.save(dataRootPath+'/grid_filled.npy',data)
 print 'Refine the grid',time.ctime()
-refineGrid(data,5000,NNEIGHBOR=30,PERCENTAGE=.9)
+# refineGrid(data,5000,NNEIGHBOR=20,PERCENTAGE=.9)
+# np.save(dataRootPath+'/grid.npy',data)
+
+refineGrid(data,5000,NNEIGHBOR=30,PERCENTAGE=.8,RANDQUEUE=[ i for i,d in enumerate(data) if d.cost>3 ])
+np.save(dataRootPath+'/grid.npy',data)
+refineGrid(data,5000,NNEIGHBOR=20,PERCENTAGE=1.1)
 np.save(dataRootPath+'/grid.npy',data)
 
 '''
@@ -976,3 +987,6 @@ plt.subplot(2,2,4)
 plt.scatter(D[:,0].flat,D[:,1].flat,c=D[:,5].flat,s=70,alpha=.8,linewidths=0)
 plt.colorbar()
 '''
+
+print 'Done',time.ctime()
+
