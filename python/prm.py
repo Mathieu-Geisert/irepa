@@ -272,8 +272,9 @@ class PRM:
                plt.draw()
 
 
-  def connectToZero(graph,idx0=1,VERBOSE=False):
+  def connectToZero(self,idx0=1,VERBOSE=False):
      '''Tries to connect all nodes of the graph to node <idx0>.'''   
+     graph = self.graph
      for i in range(idx0,len(graph.x)):
           if VERBOSE: print 'Connect with ',i
           if 0 not in graph.children[i] and connect(graph.x[i],graph.x[0]):
@@ -285,13 +286,13 @@ class PRM:
 
 
 
-  def connexifyPrm(graph,NTRIAL = 1000,PAUSEFREQ = 50,NCONNECT=5,VERBOSE=False):
+  def connexifyPrm(self,NTRIAL = 1000,PAUSEFREQ = 50,NCONNECT=5,VERBOSE=False):
      '''Try to create additionnal edges between nodes of the graph that are not connected.'''  
      graph = self.graph
      connect = self.connect
      for trial in xrange(NTRIAL):
           if not trial % PAUSEFREQ: 
-               print 'Time for a little break ... 2s',time.ctime()
+               print 'Time for a little break ... 1s',time.ctime()
                time.sleep(1)
           if VERBOSE: print 'trial #',trial
           while True:  # Take two samples that are not connected
