@@ -51,6 +51,11 @@ int main(int argc, const char ** argv )
 
   //  --- SETUP OCP -----------------------
   OCP ocp( 0.0, T, opts.steps() );                        // time horizon of the OCP: [0,T]
+
+  IntermediateState cost = qx*qx + qz*qz + qth*qth 
+    + .1* (vx*vx +vz*vz + vth*vth)
+    + 1e-3* ( (2*fp-m*g)*(2*fp-m*g) + (2*fn-m*g)*(2*fn-m*g) );
+  //ocp.minimizeLagrangeTerm(cost);
   ocp.minimizeMayerTerm( T );
 
   f << dot(qx)   == vx;
@@ -87,7 +92,8 @@ int main(int argc, const char ** argv )
 
   OptimizationAlgorithm algorithm(ocp);
 
-  setupPlots(algorithm,opts,qx,qz,qth,fp,"X","Z","TH");
+  IntermediateState ftot = fp+fn;
+  setupPlots(algorithm,opts,qx,qz,qth,ftot,"X","Z","TH");
   initControlAndState(algorithm,opts);
   initHorizon(algorithm,opts);
   initAlgorithmStandardParameters(algorithm,opts);

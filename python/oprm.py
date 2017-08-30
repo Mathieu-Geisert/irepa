@@ -174,4 +174,4 @@ class OptimalPRM(PRM):
                print 'Connect %d to %d'%(idx1,idx2)
                traj.time = traj.times[-1]
                del traj.times
-               graph.addEdge(idx1,idx2,+1,*traj)
+               graph.addEdge(idx1,idx2,+1,**traj._asdict())

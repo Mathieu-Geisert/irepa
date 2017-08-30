@@ -96,12 +96,11 @@ class AcadoConnect(AcadoRunner):
           return {'init':  [ x0[:self.NQ].flat,x0[self.NQ:].flat ],
                   'final': [ x1[:self.NQ].flat,x1[self.NQ:].flat ] }
 
-     def run(self,x0,x1,autoInit=True,**kwargs):
+     def run(self,x0,x1,autoInit=True,threshold=1e-3,**kwargs):
           if autoInit:               self.buildInitGuess(x0,x1)
-          print kwargs,self.stateDict(x0,x1)
           AcadoRunner.run(self,states=self.stateDict(x0,x1), **kwargs)
           # # Run may raise an error but always return True.
-          return self.checkResult(True,x0,x1)
+          return self.checkResult(True,x0,x1,threshold=threshold)
 
      def checkResult(self,ret,x0=None,x1=None,jobid=None,threshold=1e-3):
           if not ret: return False

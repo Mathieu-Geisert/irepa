@@ -255,17 +255,18 @@ class PRM:
                     edges.append( [ idx, idx2, connect.results() ] )
                # From graph to x
                if connect(graph.x[idx2],x):
-                    edges.append( [ idx, idx2, connect.results() ] )
+                    edges.append( [ idx2, idx, connect.results() ] )
 
           edges = sorted(edges, key = lambda e: e[2])[:min(len(edges),NBEST)]
           for idx1, idx2, edge in edges:
-               graph.addEdge(idx1,idx2,+1,*edge)
+               graph.addEdge(idx1,idx2,+1,**edge._asdict())
                graph.renameConnex(graph.connex[idx2],graph.connex[idx1])
 
           if VERBOSE:
-               print "PRM sample #",len(graph.x)
+               print "PRM sample #",len(graph.x)-1
                graph.plotNode(idx)
                for idx1,idx2,_ in edges: 
+                    print '\t ...Connect %d to %d'%(idx1,idx2)
                     graph.plotEdge(idx1,idx2,withTruePath=True,
                                    color= 'k' if idx1<idx2 else '.5')
                plt.draw()
@@ -277,10 +278,10 @@ class PRM:
           if VERBOSE: print 'Connect with ',i
           if 0 not in graph.children[i] and connect(graph.x[i],graph.x[0]):
                if VERBOSE: print '\tTo <%d>: yes' % idx0
-               graph.addEdge(i,0,+1,*connect.results())
+               graph.addEdge(i,0,+1,**connect.results().asdict())
           if i not in graph.children[0] and connect(graph.x[0],graph.x[i]):
                if VERBOSE: print '\tFrom <%d>: yes' % idx0
-               graph.addEdge(0,i,+1,*connect.results())
+               graph.addEdge(0,i,+1,**connect.results()._asdict())
 
 
 
@@ -302,5 +303,5 @@ class PRM:
           for ides in random.sample(des,NCONNECT) if len(des)>NCONNECT else des:
                assert(idx2 not in graph.children[ides])
                if connect(graph.x[ides],graph.x[idx2]):
-                    graph.addEdge(ides,idx2,+1,*connect.results())
+                    graph.addEdge(ides,idx2,+1,**connect.results()._asdict())
                     if VERBOSE: print 'Connect %d to %d'%(ides,idx2)
