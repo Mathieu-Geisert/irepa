@@ -3,6 +3,7 @@ from prm import PRM
 from astar import astar
 import numpy as np
 from pinocchio.utils import *
+import random
 
 class OptimalPRM(PRM):
   PathFromResults = namedtuple("PathFromResults",['states','controls','times','cost'])
@@ -23,18 +24,6 @@ class OptimalPRM(PRM):
        PRM.__init__(self,graph,sampler,checker,nearestNeighbor,connect)
        self.acado       = acado
        self.stateDiff   = stateDiff
-       self.acadoSetup("policy")
-
-  def acadoSetup(self,setup="traj"):
-       del self.acado.options['horizon']
-       del self.acado.options['Tmax']
-       self.acado.debug(False)
-       if setup=="traj":
-            self.acado.iter               = 100
-            self.acado.options['steps']   = 50
-       elif setup=="policy":
-            self.acado.iter               = 80
-            self.acado.options['steps']   = 20
 
   def pathFrom(self,idx,idx2=0):
      '''
@@ -162,13 +151,13 @@ class OptimalPRM(PRM):
                if PAUSEFREQ>0 and not trial % PAUSEFREQ: 
                     print 'Time for a little break ... 2s',time.ctime()
                     time.sleep(1)
-               print 'trial #',trial
                idx1=random.randint(0,len(graph.x)-1)
                idx2=random.randint(0,len(graph.x)-1)
                if idx1==idx2: continue
                if idx2 in graph.children[idx1]: continue
+               print 'trial #%d: %3d to %3d' %( trial,idx1,idx2 )
                try:
-                    traj = self.getOpt(idx1,idx2)
+                    traj = self.optPathFrom(idx1,idx2)
                except:
                     continue
                print 'Connect %d to %d'%(idx1,idx2)

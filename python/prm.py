@@ -203,16 +203,12 @@ class ConnectAbstract:
           return True
      def cost(self):
           '''Return the cost of previous call'''
-          return 0.
      def states(self):
           '''Return the state traj of previous call'''
-          return []
      def controls(self):
           '''Return the control traj of previous call'''
-          return []
      def time(self):
           '''Return the trajectory total time of previous call'''
-          return 0.
      def results(self):
           return ConnectResults(cost=self.cost(), states=self.states(), 
                                 controls=self.controls(), time=self.time() )

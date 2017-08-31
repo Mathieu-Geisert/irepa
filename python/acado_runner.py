@@ -155,7 +155,7 @@ class AcadoRunner(object):
         X = f2a(self.stateFile('o',jobid))
         return X[:,1:-1] if self.withRunningCost else X[:,1:]
     def controls(self,jobid=None):
-        return f2a(self.controlFile('o',jobid))
+        return f2a(self.controlFile('o',jobid))[:,1:]
     def costs(self,jobid=None):
         assert(self.withRunningCost)
         return f2a(self.stateFile('o',jobid))[:,-1]
