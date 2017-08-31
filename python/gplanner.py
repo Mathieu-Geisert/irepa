@@ -98,8 +98,8 @@ class BicopterStateDiff:
 # --- MAIN -----------------------------------------------------------------------
 # --- MAIN -----------------------------------------------------------------------
 
-EXTEND_PRM   = [1,2,6]
-LOAD_PRM     = False
+EXTEND_PRM   = [6]
+LOAD_PRM     = True
 LOAD_GRID    = False
 SAMPLE_GRID  = False
 REFINE_GRID  = []
@@ -118,7 +118,7 @@ random.seed         (RANDOM_SEED)
 
 plt.ion()
 
-env     = Bicopter(withDisplay=True)
+env     = Bicopter(withDisplay=False)
 NX      = 6
 NQ      = 3
 NV      = 3
@@ -153,7 +153,7 @@ x1 = zero(6); x1[0] = .1
 acado.run(x0,x1)
 
 if LOAD_PRM:
-     prm.graph.load(dataRootPath)
+     prm.graph.load(dataRootPath+'_200pts')
 
 if 1 in EXTEND_PRM:
      print '### Initial sampling of PRM',time.ctime()
@@ -200,10 +200,11 @@ if 4 in EXTEND_PRM:
 
 if 6 in EXTEND_PRM:
      print '### Connect all points to zero (at least tries)',time.ctime()
-     connectToZero(graph)
-     print 'Densify PRM',time.ctime()
-     densifyPrm(graph)
-     connexifyPrm(graph)
+     prm.connectToZero(VERBOSE=True)
+     #print 'Densify PRM',time.ctime()
+     #densifyPrm(graph)
+     print 'Connexify PRM',time.ctime()
+     prm.connexifyPrm(VERBOSE=True)
 
      prm.graph.save(dataRootPath)
 

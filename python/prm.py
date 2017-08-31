@@ -275,11 +275,12 @@ class PRM:
   def connectToZero(self,idx0=1,VERBOSE=False):
      '''Tries to connect all nodes of the graph to node <idx0>.'''   
      graph = self.graph
+     connect = self.connect
      for i in range(idx0,len(graph.x)):
           if VERBOSE: print 'Connect with ',i
           if 0 not in graph.children[i] and connect(graph.x[i],graph.x[0]):
                if VERBOSE: print '\tTo <%d>: yes' % idx0
-               graph.addEdge(i,0,+1,**connect.results().asdict())
+               graph.addEdge(i,0,+1,**connect.results()._asdict())
           if i not in graph.children[0] and connect(graph.x[0],graph.x[i]):
                if VERBOSE: print '\tFrom <%d>: yes' % idx0
                graph.addEdge(0,i,+1,**connect.results()._asdict())
