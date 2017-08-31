@@ -107,8 +107,8 @@ class BicopterStateDiff:
 # --- MAIN -----------------------------------------------------------------------
 # --- MAIN -----------------------------------------------------------------------
 
-EXTEND_PRM   = []
-LOAD_PRM     = True
+EXTEND_PRM   = [ 1,6 ]
+LOAD_PRM     = False
 LOAD_GRID    = False
 SAMPLE_GRID  = False
 REFINE_GRID  = []
@@ -155,12 +155,6 @@ prm.graph.x[0] = zero(NX)
 connect = prm.connect
 nearest = prm.nearestNeighbor
 graph   = prm.graph
-
-
-x0 = zero(6)
-x1 = zero(6); x1[0] = .1
-
-acado.run(x0,x1)
 
 if LOAD_PRM:
      prm.graph.load(dataRootPath)
@@ -231,7 +225,11 @@ if LOAD_GRID:
 
 if SAMPLE_GRID:     
      print 'Sample the grid',time.ctime()
+     config(acado,'policy')
      grid.sample()
+
+if len(REFINE_GRID)>0: 
+     config(acado,'refine')
 
 if 1 in REFINE_GRID:
      print 'Fill the grid',time.ctime()
