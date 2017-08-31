@@ -275,6 +275,7 @@ class PRM:
   def connectToZero(self,idx0=1,VERBOSE=False):
      '''Tries to connect all nodes of the graph to node <idx0>.'''   
      graph = self.graph
+     connect = self.connect
      for i in range(idx0,len(graph.x)):
           if VERBOSE: print 'Connect with ',i
           if 0 not in graph.children[i] and connect(graph.x[i],graph.x[0]):

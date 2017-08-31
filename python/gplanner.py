@@ -159,8 +159,8 @@ if 1 in EXTEND_PRM:
      print '### Initial sampling of PRM',time.ctime()
      for i in range(5):
           prm(20,10,10,True)
-          print 'Sleeping 10 ... it is time for a little CTRL-C ',time.ctime()
-          #time.sleep(1)
+          print 'Sleeping 1s ... it is time for a little CTRL-C ',time.ctime()
+          time.sleep(1)
      graph.save(dataRootPath+'_100pts')
 
 if 2 in EXTEND_PRM:
@@ -169,8 +169,8 @@ if 2 in EXTEND_PRM:
      env.vlow[:] = -.2
      for i in range(5):
           prm(10,50,50,False)
-          print 'Sleeping 10 ... it is time for a little CTRL-C ',time.ctime()
-          time.sleep(10)
+          print 'Sleeping 1s ... it is time for a little CTRL-C ',time.ctime()
+          time.sleep(1)
      graph.save(dataRootPath+'_200pts')
 
 if 3 in EXTEND_PRM:
@@ -182,8 +182,8 @@ if 3 in EXTEND_PRM:
      prevSize = len(graph.x)
      for i in range(5):
           prm(10,20,20,False)
-          print 'Sleeping 10 ... it is time for a little CTRL-C ',time.ctime()
-          time.sleep(10)
+          print 'Sleeping 1s ... it is time for a little CTRL-C ',time.ctime()
+          time.sleep(1)
      graph.save(dataRootPath+'_400pts')
 
 if 4 in EXTEND_PRM:
@@ -195,14 +195,15 @@ if 4 in EXTEND_PRM:
      prevSize = len(graph.x)
      for i in range(5):
           prm(10,20,20,False)
-          print 'Sleeping 10 ... it is time for a little CTRL-C ',time.ctime()
-          time.sleep(10)
+          print 'Sleeping 1s ... it is time for a little CTRL-C ',time.ctime()
+          time.sleep(1)
 
 if 6 in EXTEND_PRM:
      print '### Connect all points to zero (at least tries)',time.ctime()
      connectToZero(graph)
-     print 'Densify PRM',time.ctime()
-     densifyPrm(graph)
+     #print 'Densify PRM',time.ctime()
+     #densifyPrm(graph)
+     print 'Connexify PRM',time.ctime()
      connexifyPrm(graph)
 
      prm.graph.save(dataRootPath)
@@ -214,7 +215,8 @@ if 6 in EXTEND_PRM:
 oprm = OptimalPRM.makeFromPRM(prm,acado=prm.connect.acado,stateDiff=BicopterStateDiff())
 grid = GridPolicy(oprm)
 EPS = 1e-3
-grid.setGrid([ -np.pi,-np.pi+EPS,0,0],[np.pi,np.pi-EPS,EPS,EPS],1.)
+grid.setGrid( np.concatenate([ env.qlow, zero(3)-EPS ]),
+              np.concatenate([ env.qup , zero(3)+EPS ]), .2 )
 
 if SAMPLE_GRID:     
      print 'Sample the grid',time.ctime()
