@@ -44,33 +44,40 @@ class GraphBicopter(Graph):
                plt.plot(path[[0,-1],0],path[[0,-1],1],plotstr,**kwargs)
 
 def config(acado,label,env=None):
-     del acado.options['icontrol']
+     acado.options['printlevel']    = 1
      if env is not None:
           acado.options['umax']     = "%.2f %.2f" % tuple([x for x in env.umax])
           
      if label == "connect":
+          if 'icontrol' in acado.options: del acado.options['icontrol']
           acado.debug(False)
           acado.iter                = 20
           acado.options['steps']    = 25
           acado.setTimeInterval(1.5)
 
      elif label == "traj":
-          del acado.options['horizon']
-          del acado.options['Tmax']
+          if 'horizon' in acado.options: del acado.options['horizon']
+          if 'Tmax'    in acado.options: del acado.options['Tmax']
           acado.debug(False)
           acado.iter                = 100
           acado.options['steps']    = 50
+          acado.options['icontrol'] = acadoTxtPath+'guess.clt'
           
      elif label == "policy":
-          del acado.options['horizon']
-          del acado.options['Tmax']
+          if 'horizon' in acado.options: del acado.options['horizon']
+          if 'Tmax'    in acado.options: del acado.options['Tmax']
           acado.debug(False)
           acado.iter                = 80
           acado.options['steps']    = 20
+          acado.options['icontrol'] = acadoTxtPath+'guess.clt'
 
      elif label == "refine":
+          if 'horizon' in acado.options: del acado.options['horizon']
+          if 'Tmax'    in acado.options: del acado.options['Tmax']
+          acado.debug(False)
           acado.iter                = 80
           acado.options['steps']    = 20
+          acado.options['icontrol'] = acadoTxtPath+'guess.clt'
 
 class ConnectAcado(ConnectAbstract):
      def __init__(self,acado):
@@ -89,6 +96,8 @@ class ConnectAcado(ConnectAbstract):
           return self.acado.opttime()
      def times(self):
           return self.acado.times()
+     def time(self):
+          return self.acado.opttime()
 
 class BicopterStateDiff:
      def __call__(self,x1,x2):
@@ -98,8 +107,8 @@ class BicopterStateDiff:
 # --- MAIN -----------------------------------------------------------------------
 # --- MAIN -----------------------------------------------------------------------
 
-EXTEND_PRM   = [1,2,6]
-LOAD_PRM     = False
+EXTEND_PRM   = []
+LOAD_PRM     = True
 LOAD_GRID    = False
 SAMPLE_GRID  = False
 REFINE_GRID  = []
@@ -118,7 +127,7 @@ random.seed         (RANDOM_SEED)
 
 plt.ion()
 
-env     = Bicopter(withDisplay=True)
+env     = Bicopter(withDisplay=False)
 NX      = 6
 NQ      = 3
 NV      = 3
@@ -138,6 +147,7 @@ prm = PRM(GraphBicopter(),
           checker = lambda x:True,
           nearestNeighbor = NearestNeighbor(DistanceSO3([1,.1])),
           connect = ConnectAcado(acado))
+prm = OptimalPRM.makeFromPRM(prm,acado=prm.connect.acado,stateDiff=BicopterStateDiff())
 
 prm.graph.addNode(newConnex=True)
 prm.graph.x[0] = zero(NX)
@@ -200,29 +210,28 @@ if 4 in EXTEND_PRM:
 
 if 6 in EXTEND_PRM:
      print '### Connect all points to zero (at least tries)',time.ctime()
-     connectToZero(graph)
+     prm.connectToZero(VERBOSE=True)
      #print 'Densify PRM',time.ctime()
      #densifyPrm(graph)
      print 'Connexify PRM',time.ctime()
-     connexifyPrm(graph)
-
+     prm.connexifyPrm(VERBOSE=True)
      prm.graph.save(dataRootPath)
 
 # --- GRID ---
 # --- GRID ---
 # --- GRID ---
 
-oprm = OptimalPRM.makeFromPRM(prm,acado=prm.connect.acado,stateDiff=BicopterStateDiff())
-grid = GridPolicy(oprm)
+grid = GridPolicy(prm)
 EPS = 1e-3
 grid.setGrid( np.concatenate([ env.qlow, zero(3)-EPS ]),
               np.concatenate([ env.qup , zero(3)+EPS ]), .2 )
 
+if LOAD_GRID:
+     grid.load(dataRootPath+'/grid.npy')
+
 if SAMPLE_GRID:     
      print 'Sample the grid',time.ctime()
      grid.sample()
-else:
-     grid.load(dataRootPath+'/grid.npy')
 
 if 1 in REFINE_GRID:
      print 'Fill the grid',time.ctime()
@@ -251,11 +260,5 @@ if 4 in REFINE_GRID:
 # --- MISC ---
 # --- MISC ---
 
-fromcursor = FromCursor(oprm,grid,env)
-acado = oprm.acado
-nearest = prm.nearestNeighbor
+fromcursor = FromCursor(prm,grid,env)
 plt.ion()
-
-
-def dg(**kw):
-     for k,v in kw.items(): print k,v
