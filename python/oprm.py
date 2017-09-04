@@ -166,4 +166,4 @@ class OptimalPRM(PRM):
                ttime = traj.times[-1]
                if VERBOSE>1: print '\t\tWas %.2f -- Now %.2f' \
                      % ( self.pathFrom(idx1,idx2).times[-1],ttime)
-               graph.addEdge(idx1,idx2,+1,**traj._asdict())
+               graph.addEdge(idx1,idx2,+1,**traj._asdict(),time=ttime)
