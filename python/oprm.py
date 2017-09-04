@@ -161,14 +161,16 @@ class OptimalPRM(PRM):
                idx2=random.randint(0,len(graph.x)-1)
                if idx1==idx2: continue
                if CHECKCHILD and idx2 in graph.children[idx1]: continue
-               if VERBOSE: print 'trial #%d: %3d to %3d' %( trial,idx1,idx2 )
+               if VERBOSE>1: print 'trial #%d: %3d to %3d' %( trial,idx1,idx2 )
                try:
                     traj = self.optPathFrom(idx1,idx2)
                except Exception as exc:
                     print exc
                     continue
-               if VERBOSE: print '\t\tConnect %d to %d'%(idx1,idx2)
+               if VERBOSE>1: print '\t\tConnect %d to %d'%(idx1,idx2)
                ttime = traj.times[-1]
-               if VERBOSE>1: print '\t\tWas %.2f -- Now %.2f' \
-                     % ( self.pathFrom(idx1,idx2).times[-1],ttime)
+               if VERBOSE: 
+                 prevtime = self.pathFrom(idx1,idx2).times[-1]
+                 if prevtime < .9*ttime:
+                   print '\t\tWas %.2f -- Now %.2f' % (prevtime,ttime)
                graph.addEdge(idx1,idx2,+1,time=ttime,**traj._asdict())
