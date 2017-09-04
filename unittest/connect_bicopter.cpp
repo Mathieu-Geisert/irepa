@@ -24,7 +24,7 @@ int main(int argc, const char ** argv )
   /* --- OPTIONS ----------------------------------------------------------------------------- */
   /* --- OPTIONS ----------------------------------------------------------------------------- */
   /* --- OPTIONS ----------------------------------------------------------------------------- */
-  OptionsOCP opts; opts.parse(argc,argv);
+  OptionsBicopter opts; opts.parse(argc,argv);
   opts.NQ = 3; opts.NV = 3; opts.NU = 2;
   assert( opts.friction().size() == 2);
   assert( opts.umax()    .size() == 2);
@@ -86,7 +86,7 @@ int main(int argc, const char ** argv )
 
   ocp.subjectTo( opts.Tmin()  <= T  <= opts.Tmax()  );
 
-  //ocp.subjectTo( -M_PI  <= qth <=  M_PI   );
+  ocp.subjectTo( -opts.thetaMax()  <= qth <=  opts.thetaMax()   );
 
   //  --- SETUP SOLVER --------------------
 
