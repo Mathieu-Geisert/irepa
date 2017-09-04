@@ -193,7 +193,7 @@ if 3 in EXTEND_PRM:
      graph.save(dataRootPath+'_400pts')
 
 if 4 in EXTEND_PRM:
-     print '### Filling the prm with additional points close to joint limit.',time.ctime()
+     print '### Filling the prm with additional points close to joint limit. ',time.ctime()
      env.qlow = np.matrix([-5, -np.pi]).T
      env.qup  = np.matrix([ 5, -.6*np.pi]).T
      env.vlow[:] = -.5
@@ -205,19 +205,19 @@ if 4 in EXTEND_PRM:
           time.sleep(1)
 
 if 5 in EXTEND_PRM:
-     print '### Connect all points to zero (at least tries)',time.ctime()
+     print '### Connect all points to zero (at least tries). ',time.ctime()
      prm.connectToZero(VERBOSE=True)
      print 'Connexify PRM',time.ctime()
      prm.connexifyPrm(VERBOSE=True)
      prm.graph.save(dataRootPath)
 
 if 6 in EXTEND_PRM:
-     print '### Densify PRM',time.ctime()
+     print '### Densify PRM. ',time.ctime()
      config(acado,'traj')
-     prm.densifyPrm(1000,VERBOSE=2)
+     prm.densifyPrm(2000,VERBOSE=2)
      prm.graph.save(dataRootPath)
 
-
+print 'Done with the PRM. ',time.ctime()
 # --- GRID ---
 # --- GRID ---
 # --- GRID ---
