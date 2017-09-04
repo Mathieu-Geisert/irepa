@@ -142,9 +142,11 @@ class OptimalPRM(PRM):
 
      return solutions[0]
 
-  def densifyPrm(self,NTRIAL=1000,PAUSEFREQ=0):
+  def densifyPrm(self,NTRIAL=1000,PAUSEFREQ=0,CHECKCHILD=False,VERBOSE=False):
        '''
        Try to directly connect some nodes in the PRM.
+       If CHECKCHILD is True, then the solver do not tries to find shorter paths for 
+       nodes that are already directly connected.
        '''  
        graph = self.graph
        for trial in xrange(NTRIAL):
@@ -154,13 +156,14 @@ class OptimalPRM(PRM):
                idx1=random.randint(0,len(graph.x)-1)
                idx2=random.randint(0,len(graph.x)-1)
                if idx1==idx2: continue
-               if idx2 in graph.children[idx1]: continue
-               print 'trial #%d: %3d to %3d' %( trial,idx1,idx2 )
+               if CHECKCHILD and idx2 in graph.children[idx1]: continue
+               if VERBOSE: print 'trial #%d: %3d to %3d' %( trial,idx1,idx2 )
                try:
                     traj = self.optPathFrom(idx1,idx2)
                except:
                     continue
-               print 'Connect %d to %d'%(idx1,idx2)
-               traj.time = traj.times[-1]
-               del traj.times
+               if VERBOSE: print '\t\tConnect %d to %d'%(idx1,idx2)
+               ttime = traj.times[-1]
+               if VERBOSE>1: print '\t\tWas %.2f -- Now %.2f' \
+                     % ( self.pathFrom(idx1,idx2).times[-1],ttime)
                graph.addEdge(idx1,idx2,+1,**traj._asdict())

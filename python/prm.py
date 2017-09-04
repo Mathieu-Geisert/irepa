@@ -32,7 +32,7 @@ class Graph:
           return idx
 
      def addEdge(self,first,second,orientation = 0,
-                 states = None, controls = None, cost = -1, time = 0. ):
+                 states = None, controls = None, cost = -1, time = 0., times = None ):
           '''
           Add edge from first to second. Also add edge from second to first if orientation
           is null.
@@ -291,12 +291,16 @@ class PRM:
           if not trial % PAUSEFREQ: 
                print 'Time for a little break ... 1s',time.ctime()
                time.sleep(1)
-          while True:  # Take two samples that are not connected
+          for ishoot in range(len(graph.x)**2):
+               # Take two samples that are not connected
                idx1=random.randint(0,len(graph.x)-1)
                idx2=random.randint(0,len(graph.x)-1)
                if idx1 == idx2: continue
                des = graph.descendants(idx1)
                if idx2 not in des: break
+          if idx2 in des: 
+               print "Graph is likely fully connected"
+               break
           if VERBOSE: print 'trial #%d: from %d to %d' % (trial,idx1,idx2)
           for ides in random.sample(des,NCONNECT) if len(des)>NCONNECT else des:
                assert(idx2 not in graph.children[ides])

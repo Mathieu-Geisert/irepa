@@ -46,7 +46,7 @@ class GraphBicopter(Graph):
 def config(acado,label,env=None):
      acado.options['thetamax']    = np.pi/2
      acado.options['printlevel']    = 1
-     del acado.options['shift']
+     if 'shift' in acado.options: del acado.options['shift']
      if env is not None:
           acado.options['umax']     = "%.2f %.2f" % tuple([x for x in env.umax])
           
@@ -109,7 +109,7 @@ class BicopterStateDiff:
 # --- MAIN -----------------------------------------------------------------------
 # --- MAIN -----------------------------------------------------------------------
 
-EXTEND_PRM   = [ ]
+EXTEND_PRM   = [ 6 ]
 LOAD_PRM     = True
 LOAD_GRID    = False
 SAMPLE_GRID  = False
@@ -204,14 +204,19 @@ if 4 in EXTEND_PRM:
           print 'Sleeping 1s ... it is time for a little CTRL-C ',time.ctime()
           time.sleep(1)
 
-if 6 in EXTEND_PRM:
+if 5 in EXTEND_PRM:
      print '### Connect all points to zero (at least tries)',time.ctime()
      prm.connectToZero(VERBOSE=True)
-     #print 'Densify PRM',time.ctime()
-     #densifyPrm(graph)
      print 'Connexify PRM',time.ctime()
      prm.connexifyPrm(VERBOSE=True)
      prm.graph.save(dataRootPath)
+
+if 6 in EXTEND_PRM:
+     print '### Densify PRM',time.ctime()
+     config(acado,'traj')
+     prm.densifyPrm(1000,VERBOSE=2)
+     prm.graph.save(dataRootPath)
+
 
 # --- GRID ---
 # --- GRID ---
