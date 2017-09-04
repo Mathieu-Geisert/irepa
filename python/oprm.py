@@ -101,6 +101,7 @@ class OptimalPRM(PRM):
 
      jobs = {}
      for idx in nearest(x0,graph.x,nbpoint*2,fullSort=True):
+          if idx==0: continue
           xnear = graph.x[idx]
           x0    = xnear - self.stateDiff(x0,xnear)
 

@@ -113,7 +113,7 @@ EXTEND_PRM   = [ ]
 LOAD_PRM     = True
 LOAD_GRID    = False
 SAMPLE_GRID  = True
-REFINE_GRID  = []
+REFINE_GRID  = [ 1,2 ]
 '''
 EXTEND_PRM   = 0
 LOAD_PRM     = True
@@ -227,14 +227,16 @@ EPS = 1e-3
 grid.setGrid( np.concatenate([ env.qlow, zero(3) ]),
               np.concatenate([ env.qup , zero(3)+EPS ]), .2 )
 
+config(acado,'policy')
+acado.setup_async(32,200)
+
 if LOAD_GRID:
      grid.load(dataRootPath+'/grid.npy')
 
 if SAMPLE_GRID:     
      print 'Sample the grid',time.ctime()
-     config(acado,'policy')
-     acado.setup_async(32,200)
      grid.sample(subsample=1)
+     np.save(dataRootPath+'/grid_sampled.npy',data)
 
 if len(REFINE_GRID)>0: 
      config(acado,'refine')
