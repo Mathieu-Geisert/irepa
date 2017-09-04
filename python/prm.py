@@ -38,12 +38,13 @@ class Graph:
           is null.
           '''
           assert( first in self.children and second in self.children )
-
-          self.children[first].append(second)
-          self.states[ first,second ]     = states
+          assert( (first,second) not in self.edgeCost or self.edgeCost[first,second]*1.1>=cost )
+               
+          if second not in self.children[first] : self.children[first].append(second)
+          self.states  [ first,second ]   = states
           self.controls[ first,second ]   = controls
           self.edgeCost[ first,second ]   = cost
-          self.edgeTime[first,second]     = time
+          self.edgeTime[ first,second ]   = time
 
      def newConnex(self,idx):
           '''

@@ -109,10 +109,10 @@ class BicopterStateDiff:
 # --- MAIN -----------------------------------------------------------------------
 # --- MAIN -----------------------------------------------------------------------
 
-EXTEND_PRM   = [ 6 ]
+EXTEND_PRM   = [ ]
 LOAD_PRM     = True
 LOAD_GRID    = False
-SAMPLE_GRID  = False
+SAMPLE_GRID  = True
 REFINE_GRID  = []
 '''
 EXTEND_PRM   = 0
@@ -224,7 +224,7 @@ print 'Done with the PRM. ',time.ctime()
 
 grid = GridPolicy(prm)
 EPS = 1e-3
-grid.setGrid( np.concatenate([ env.qlow, zero(3)-EPS ]),
+grid.setGrid( np.concatenate([ env.qlow, zero(3) ]),
               np.concatenate([ env.qup , zero(3)+EPS ]), .2 )
 
 if LOAD_GRID:
@@ -233,7 +233,8 @@ if LOAD_GRID:
 if SAMPLE_GRID:     
      print 'Sample the grid',time.ctime()
      config(acado,'policy')
-     grid.sample()
+     acado.setup_async(32,200)
+     grid.sample(subsample=1)
 
 if len(REFINE_GRID)>0: 
      config(acado,'refine')
@@ -267,3 +268,9 @@ if 4 in REFINE_GRID:
 
 fromcursor = FromCursor(prm,grid,env)
 plt.ion()
+
+
+
+# for i,c in graph.children.items():
+#      graph.children[i] = list(set(c))
+#      if len(c)!=len(set(c)): break
