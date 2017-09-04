@@ -47,13 +47,13 @@ class GridPolicy:
    def reconfigAcado(self):
         '''Change the setup of acado to correspond to the need of refineGrid.'''
 
-   def sample(self,verbose=False,step=1):
+   def sample(self,subsample=1,verbose=False):
      '''Generate the point of the grid.'''
      data = self.data
      grid = self.grid 
      oprm = self.optimalPRM
      checkifexist = len(data) > 0   
-     for trial,x0 in enumerate(self.grid[::step,:]):
+     for trial,x0 in enumerate(self.grid[::subsample,:]):
           if verbose: print 'Traj #',trial
           try:
                x0 = np.matrix(x0).T
