@@ -235,7 +235,7 @@ if LOAD_GRID:
 
 if SAMPLE_GRID:     
      print 'Sample the grid',time.ctime()
-     grid.sample(subsample=1)
+     grid.sample(subsample=1,verbose=True)
      np.save(dataRootPath+'/grid_sampled.npy',data)
 
 if len(REFINE_GRID)>0: 
