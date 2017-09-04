@@ -291,13 +291,13 @@ class PRM:
           if not trial % PAUSEFREQ: 
                print 'Time for a little break ... 1s',time.ctime()
                time.sleep(1)
-          if VERBOSE: print 'trial #',trial
           while True:  # Take two samples that are not connected
                idx1=random.randint(0,len(graph.x)-1)
                idx2=random.randint(0,len(graph.x)-1)
                if idx1 == idx2: continue
                des = graph.descendants(idx1)
                if idx2 not in des: break
+          if VERBOSE: print 'trial #%d: from %d to %d' % (trial,idx1,idx2)
           for ides in random.sample(des,NCONNECT) if len(des)>NCONNECT else des:
                assert(idx2 not in graph.children[ides])
                if connect(graph.x[ides],graph.x[idx2]):

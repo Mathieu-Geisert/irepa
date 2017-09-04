@@ -44,7 +44,9 @@ class GraphBicopter(Graph):
                plt.plot(path[[0,-1],0],path[[0,-1],1],plotstr,**kwargs)
 
 def config(acado,label,env=None):
+     acado.options['thetamax']    = np.pi/2
      acado.options['printlevel']    = 1
+     del acado.options['shift']
      if env is not None:
           acado.options['umax']     = "%.2f %.2f" % tuple([x for x in env.umax])
           
@@ -52,15 +54,15 @@ def config(acado,label,env=None):
           if 'icontrol' in acado.options: del acado.options['icontrol']
           acado.debug(False)
           acado.iter                = 20
-          acado.options['steps']    = 25
-          acado.setTimeInterval(1.5)
+          acado.options['steps']    = 20
+          acado.setTimeInterval(5.)
 
      elif label == "traj":
           if 'horizon' in acado.options: del acado.options['horizon']
           if 'Tmax'    in acado.options: del acado.options['Tmax']
           acado.debug(False)
-          acado.iter                = 100
-          acado.options['steps']    = 50
+          acado.iter                = 80
+          acado.options['steps']    = 30
           acado.options['icontrol'] = acadoTxtPath+'guess.clt'
           
      elif label == "policy":
@@ -107,8 +109,8 @@ class BicopterStateDiff:
 # --- MAIN -----------------------------------------------------------------------
 # --- MAIN -----------------------------------------------------------------------
 
-EXTEND_PRM   = [ 1,6 ]
-LOAD_PRM     = False
+EXTEND_PRM   = [ ]
+LOAD_PRM     = True
 LOAD_GRID    = False
 SAMPLE_GRID  = False
 REFINE_GRID  = []
