@@ -83,6 +83,9 @@ class OptimalPRM(PRM):
      acado.run( traj.states[0,:].T,traj.states[-1,:].T,autoInit=False,
                 additionalOptions = ' --horizon=%.10f' % (ttime))
 
+     if acado.opttime()>ttime:
+       raise  RuntimeError("Optimized path is longer than initial guess: from %d to %d" % (idx,idx2) )
+
      return self.PathFromResults(states=acado.states(),controls=acado.controls(),
                                  cost=acado.cost(),times=acado.times())
 
@@ -160,10 +163,11 @@ class OptimalPRM(PRM):
                if VERBOSE: print 'trial #%d: %3d to %3d' %( trial,idx1,idx2 )
                try:
                     traj = self.optPathFrom(idx1,idx2)
-               except:
+               except Exception as exc:
+                    print exc
                     continue
                if VERBOSE: print '\t\tConnect %d to %d'%(idx1,idx2)
                ttime = traj.times[-1]
                if VERBOSE>1: print '\t\tWas %.2f -- Now %.2f' \
                      % ( self.pathFrom(idx1,idx2).times[-1],ttime)
-               graph.addEdge(idx1,idx2,+1,**traj._asdict(),time=ttime)
+               graph.addEdge(idx1,idx2,+1,time=ttime,**traj._asdict())
