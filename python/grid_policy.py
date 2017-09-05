@@ -29,8 +29,8 @@ class GridPolicy:
    def __init__(self,oprm):
         self.optimalPRM = oprm
         self.data = []
-        #self.shuffle = lambda l: random.sample(l,len(l))
-        self.shuffle = lambda l:l
+        self.shuffle = lambda l: random.sample(l,len(l))
+        #self.shuffle = lambda l:l
         self.nbpoint = 16               # Number of point sampled from PRM when computing a traj
         self.costError = 1000000.
 
@@ -53,7 +53,8 @@ class GridPolicy:
      grid = self.grid 
      oprm = self.optimalPRM
      checkifexist = len(data) > 0   
-     for trial,x0 in enumerate(self.grid[::subsample,:]):
+     if verbose: print '### Sample grid: %d points to evaluate' % len(self.grid[::subsample,:])
+     for trial,x0 in enumerate(self.shuffle(self.grid[::subsample,:])):
           if verbose: print 'Traj #',trial
           try:
                x0 = np.matrix(x0).T
