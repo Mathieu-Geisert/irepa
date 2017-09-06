@@ -54,7 +54,7 @@ class GridPolicy:
      oprm = self.optimalPRM
      checkifexist = len(data) > 0   
      if verbose: print '### Sample grid: %d points to evaluate' % len(self.grid[::subsample,:])
-     for trial,x0 in enumerate(self.shuffle(self.grid[::subsample,:])):
+     for trial,x0 in enumerate(self.shuffle(self.grid)[::subsample]):
           if verbose: print 'Traj #',trial
           try:
                x0 = np.matrix(x0).T

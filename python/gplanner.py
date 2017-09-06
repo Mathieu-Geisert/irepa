@@ -105,15 +105,29 @@ class BicopterStateDiff:
      def __call__(self,x1,x2):
           return x2-x1
 
+def checkPRM(graph,verbose=False):
+     errors = 0
+     for (i0,i1),X in graph.states.items():
+          if not np.allclose(X[0 ,:],graph.x[i0].flat):
+               if verbose: print 'Error at from %3d-%3d \t(%.2f)'\
+                  %(i0,i1,norm(X[0 ,:]-graph.x[i0].flat))
+               errors +=1
+          if not np.allclose(X[-1,:],graph.x[i1].flat):
+               print 'Error at to   %3d-%3d \t(%.2f)'\
+                  %(i0,i1,norm(X[-1,:]-graph.x[i1].flat))
+               errors += 1
+
+
+
 # --- MAIN -----------------------------------------------------------------------
 # --- MAIN -----------------------------------------------------------------------
 # --- MAIN -----------------------------------------------------------------------
 
 EXTEND_PRM   = [ ]
 LOAD_PRM     = True
-LOAD_GRID    = False
-SAMPLE_GRID  = True
-REFINE_GRID  = [ 1,2 ]
+LOAD_GRID    = True
+SAMPLE_GRID  = False
+REFINE_GRID  = [  ]
 '''
 EXTEND_PRM   = 0
 LOAD_PRM     = True
@@ -122,7 +136,7 @@ REFINE_GRID  = 0
 '''
 
 
-RANDOM_SEED = 999 # int((time.time()%10)*1000)
+RANDOM_SEED = 999 #int((time.time()%10)*1000)
 print "Seed = %d" %  RANDOM_SEED
 np .random.seed     (RANDOM_SEED)
 random.seed         (RANDOM_SEED)
@@ -222,21 +236,30 @@ print 'Done with the PRM. ',time.ctime()
 # --- GRID ---
 # --- GRID ---
 
+RANDOM_SEED = int((time.time()%10)*1000)
+print "Seed = %d" %  RANDOM_SEED
+np .random.seed     (RANDOM_SEED)
+random.seed         (RANDOM_SEED)
+
+dataRootPath = dataRootPath + '/2dgrid'
 grid = GridPolicy(prm)
 EPS = 1e-3
-grid.setGrid( np.concatenate([ env.qlow, zero(3) ]),
-              np.concatenate([ env.qup , zero(3)+EPS ]), .2 )
+#grid.setGrid( np.concatenate([ env.qlow, zero(3) ]),
+#              np.concatenate([ env.qup , zero(3)+EPS ]), .2 )
+grid.setGrid( np.matrix([ -1., -1., 0,  0, 0, 0 ]).T,
+              np.matrix([  1.,  1., 0,  0, 0, 0 ]).T+EPS, .01 )
 
 config(acado,'policy')
 acado.setup_async(32,200)
 
 if LOAD_GRID:
-     grid.load(dataRootPath+'/grid.npy')
+     grid.load(dataRootPath+'/grid_sampled.npy')
 
 if SAMPLE_GRID:     
      print 'Sample the grid',time.ctime()
-     grid.sample(subsample=1,verbose=True)
-     np.save(dataRootPath+'/grid_sampled.npy',data)
+     grid.sample(subsample=5,verbose=True)
+     np.save(dataRootPath+'/grid_sampled.npy',grid.data)
+     print 'Sampling done',time.ctime()
 
 if len(REFINE_GRID)>0: 
      config(acado,'refine')

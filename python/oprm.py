@@ -94,6 +94,7 @@ class OptimalPRM(PRM):
      '''
      Compute an optimal policy from one arbitrary point x0 (maybe not in the PRM) to 0.
      '''
+     if withPlot: import matplotlib.pylab as plt
      x0 = x0.copy()
      acado = self.acado
      graph = self.graph
