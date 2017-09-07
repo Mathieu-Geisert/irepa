@@ -27,7 +27,7 @@ class Bicopter:
         self.xlow    = np.vstack([self.qlow, self.vlow])
 
         self.umax    = np.matrix([ mass*10, ]*2).T
-        self.umin    = zero(2)
+        self.umin    = zero(2)-1
 
         self.withSinCos = False
 
@@ -100,6 +100,9 @@ class Bicopter:
         assert(len(x0) == self.nx)
         self.x = x0.copy()
         return self.obs(x0)
+
+    def step(self,u):
+        self.x = self.dynamics(self.x,u)
 
     def obs(self,x):
         assert(len(x) == self.nx)

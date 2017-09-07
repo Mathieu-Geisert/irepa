@@ -26,7 +26,7 @@ class GridPolicy:
 
    Data = namedtuple('Data', [ 'x0', 'X', 'cost', 'U', 'T' ])
 
-   def __init__(self,oprm):
+   def __init__(self,oprm = None):
         self.optimalPRM = oprm
         self.data = []
         self.shuffle = lambda l: random.sample(l,len(l))
@@ -50,6 +50,7 @@ class GridPolicy:
 
    def sample(self,subsample=1,verbose=False):
      '''Generate the point of the grid.'''
+     assert(self.optimalPRM is not None)
      data = self.data
      grid = self.grid 
      oprm = self.optimalPRM
