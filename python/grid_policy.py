@@ -41,6 +41,7 @@ class GridPolicy:
         if isinstance(step, float)    : step  = [step,] * len(upper)
         if lower is None              : lower = - upper
 
+        self.step = step
         self.grid = reggrid( [ np.arange(l,u,s) for l,u,s in zip(lower,upper,step) ] )
         return self.grid
 
@@ -119,15 +120,46 @@ class GridPolicy:
    def save(self,filename):
         np.save(filename,self.data)
 
-   def np(self):
-       return np.vstack([ np.hstack([d.x0.T,d.U[:1,:],np.matrix(d.cost)]) for d in self.data])
+   def np(self,data=None):
+       if data is None: data = self.data
+       return np.vstack([ np.hstack([d.x0.T,d.U[:1,:],np.matrix(d.cost)]) for d in data])
 
-   def plot(self,colorAxes,xaxis=0,yaxis=1,layout = None,**kwargs):
-       D = self.np()
+   def dataOnAPlane(self,a,b,c,eps=None):
+       '''
+       Returns only the data of the grid that are close to the plane defined 
+       by normal vectors a,b and affine residual c.
+       '''
+       if eps is None: eps = min(self.step) if 'step' in self.__dict__ else 1e-3
+       return [ d for d in self.data if isonplane(d.x0,a,b,c,eps) ]
+
+   def plot(self,colorAxes,xaxis=0,yaxis=1,affine=None,layout = None,**kwargs):
+       DIM = len(self.data[0].x0)
+       if isinstance(xaxis,int) and isinstance(yaxis,int):
+           D = self.np()
+           
+           xaxis  = onehot(xaxis,DIM)
+           yaxis  = onehot(yaxis,DIM)
+       else:
+           if affine is None: affine = zero(DIM)
+           D = self.np(self.dataOnAPlane(xaxis,yaxis,affine))
        if isinstance(colorAxes,int): colorAxes = [ colorAxes, ]
        plotargs = { 's':70,'alpha':.8,'linewidths':0,'vmax':5. }
        plotargs.update(kwargs)
        for i,c in enumerate(colorAxes):
            if layout is not None: plt.subplot(layout[0],layout[1],i)
-           plt.scatter(D[:,xaxis].flat,D[:,yaxis].flat,c=D[:,c].flat,**plotargs)
+           #plt.scatter(D[:,xaxis].flat,D[:,yaxis].flat,c=D[:,c].flat,**plotargs)
+           plt.scatter((D[:,:DIM]*xaxis).flat,(D[:,:DIM]*yaxis).flat,
+                       c=D[:,c].flat,**plotargs)
 
+
+onehot = lambda n,dim: np.matrix(np.eye(dim))[:,n]
+
+def isonplane(x,a,b,c,eps):
+    '''
+    Return true iff x is on the plane defined by the 2 normal vectors a,b (linear part, unit)
+    and c (affine part): x should be equal to ax + bx + c.
+    '''
+    return np.allclose(x,a*a.T*x+b*b.T*x+c,atol=eps)
+
+def planecood(x,a,b):
+    return [ float(a.T*x),float(b.T*x) ]
