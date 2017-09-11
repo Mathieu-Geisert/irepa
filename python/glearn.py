@@ -119,7 +119,7 @@ def train(nets = None,NEPISODES=10000,track=False):
 
     return hist
 
-hist = train(NEPISODES=int(1e5))
+hist = train(NEPISODES=int(1e4))
 
 # --- SAVE ---------------------------------------------------------
 #tf.train.Saver().save(sess,dataRootPath+'/policy')
@@ -247,12 +247,8 @@ def trial(x0 = None,dneigh=3e-1):
 
 
 # --- OPTIMIZE -----------------------------------------------------
-'''
-x0 = env.sample()
 
-X,U,T = trajFromU(x0)
-#T = sess.run( value.policy, feed_dict = { value.state: x0.T })
-
+# --- SETUP ACADO
 from specpath import acadoBinDir,acadoTxtPath
 from acado_connect import AcadoConnect
 
@@ -269,8 +265,14 @@ if env is not None:
           
 #if 'icontrol' in acado.options: del acado.options['icontrol']
 acado.debug(False)
-acado.iter                = 20
+acado.iter                = 200
 acado.options['steps']    = 20
+
+
+
+x0 = env.sample()
+
+X,U,T = trajFromU(x0)
 
 ts = np.arange(0.,1.,1./X.shape[0])
 np.savetxt(acado.stateFile  ('i'),  np.vstack([ ts, X.T]).T )
@@ -284,4 +286,3 @@ Ua = acado.controls()
 
 plt.plot(X [:,0],X [:,1],'g')
 plt.plot(Xa[:,0],Xa[:,1],'r')
-'''
