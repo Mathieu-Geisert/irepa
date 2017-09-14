@@ -5,7 +5,7 @@
 #include <acado_toolkit.hpp>
 #include "pycado/utils.hpp"
 
-struct OptionQuadcopter : public OptionsOCP
+struct OptionsQuadcopter : public OptionsOCP
 {
   virtual void addExtraOptions()
   {
@@ -27,8 +27,8 @@ int main(int argc, const char ** argv )
   /* --- OPTIONS ----------------------------------------------------------------------------- */
   /* --- OPTIONS ----------------------------------------------------------------------------- */
   /* --- OPTIONS ----------------------------------------------------------------------------- */
-  OptionsBicopter opts; opts.parse(argc,argv);
-  opts.NQ = 5; opts.NV = 5; opts.NU = 4;
+  OptionsQuadcopter opts; opts.parse(argc,argv);
+  opts.NQ = 6; opts.NV = 6; opts.NU = 4;
   assert( opts.friction().size() == 2);
   assert( opts.umax()    .size() == 4);
 
@@ -48,7 +48,7 @@ int main(int argc, const char ** argv )
   const double Ct    = 0.1 ;    // Coeff torque/force of each propeller
   const double g     = 9.81;    // gravity constant
   const double DT    = opts.T()/opts.steps(); // integration time
-  const double umax1 = opts.umax()[0], umax2 = opts.umax()[1]; umax3 = opts.umax()[2]; umax4 = opts.umax()[3];
+  const double umax1 = opts.umax()[0], umax2 = opts.umax()[1], umax3 = opts.umax()[2], umax4 = opts.umax()[3];
 
 
   //WARNING: The angles roll-pitch-yaw are considered in the inverse order of the usual convention RPY
@@ -58,7 +58,7 @@ int main(int argc, const char ** argv )
   //                                         q is the rotational speed around the local Y axis,
   //                                         r is the rotational speed around the local Z axis,
 
-  DifferentialState        qx, qy, qz, vx, vy, vz, pitch, roll, p, q, r, yaw;
+  DifferentialState        qx, qy, qz, yaw, pitch, roll, vx, vy, vz, p, q, r;
   Control                  f1,f2,f3,f4;
   Parameter                T;
   DifferentialEquation     f( 0.0, T );   // the differential equation
@@ -82,9 +82,9 @@ int main(int argc, const char ** argv )
   f << dot(yaw) == dyaw;                            //-cos(yaw)*tan(pitch)*p+sin(yaw)*tan(pitch)*q+r;
   f << dot(pitch) == dpitch;                        //sin(yaw)*p+cos(yaw)*q;
   f << dot(roll) == droll;                          //cos(yaw)/cos(pitch)*p-sin(yaw)/cos(pitch)*q;
-  f << dot(p) == (d*(u1-u2)+(Iyy-Izz)*q*r)/Ixx;
-  f << dot(q) == (d*(u4-u3)+(Izz-Ixx)*p*r)/Iyy;
-  f << dot(r) == Ct*(u1+u2-u3-u4)/Izz;
+  f << dot(p) == (l*(f1-f2)+(Iyy-Izz)*q*r)/Ixx;
+  f << dot(q) == (l*(f4-f3)+(Izz-Ixx)*p*r)/Iyy;
+  f << dot(r) == Ct*(f1+f2-f3-f4)/Izz;
 
   ocp.subjectTo( f );
 
@@ -131,13 +131,13 @@ int main(int argc, const char ** argv )
   ocp.subjectTo( AT_START,  qz  ==  opts.configInit ()[2] );
   ocp.subjectTo( AT_START,  vz  ==  opts.velInit    ()[2] );
 
-  ocp.subjectTo( AT_START,  roll ==  opts.configInit ()[3] );
-  ocp.subjectTo( AT_START, pitch ==  opts.configInit ()[4] );
-//  ocp.subjectTo( AT_START,  yaw ==  opts.configInit ()[5] );
+//  ocp.subjectTo( AT_START,  yaw ==  opts.configInit ()[3] );
+  ocp.subjectTo( AT_START,  roll ==  opts.configInit ()[4] );
+  ocp.subjectTo( AT_START, pitch ==  opts.configInit ()[5] );
 
-  ocp.subjectTo( AT_START,dpitch ==  opts.velInit    ()[3] );
-  ocp.subjectTo( AT_START, droll ==  opts.velInit    ()[4] );
-//  ocp.subjectTo( AT_START,  dyaw ==  opts.configInit ()[5] );
+//  ocp.subjectTo( AT_START,  dyaw ==  opts.configInit ()[3] );
+  ocp.subjectTo( AT_START,dpitch ==  opts.velInit    ()[4] );
+  ocp.subjectTo( AT_START, droll ==  opts.velInit    ()[5] );
 
 //  ocp.subjectTo( AT_START,  p ==  opts.velInit    ()[3] );
 //  ocp.subjectTo( AT_START,  q ==  opts.velInit    ()[4] );
@@ -153,13 +153,13 @@ int main(int argc, const char ** argv )
   ocp.subjectTo( AT_END  ,  qz  ==  opts.configFinal()[2] );
   ocp.subjectTo( AT_END  ,  vz  ==  opts.velFinal   ()[2] );
 
-  ocp.subjectTo( AT_END,   roll ==  opts.configFinal ()[3] );
-  ocp.subjectTo( AT_END,  pitch ==  opts.configFinal ()[4] );
-//  ocp.subjectTo( AT_END,  yaw ==  opts.configFinal ()[5] );
+//  ocp.subjectTo( AT_END,  yaw ==  opts.configFinal ()[3] );
+  ocp.subjectTo( AT_END,   roll ==  opts.configFinal ()[4] );
+  ocp.subjectTo( AT_END,  pitch ==  opts.configFinal ()[5] );
 
-  ocp.subjectTo( AT_END, dpitch ==  opts.velFinal    ()[3] );
-  ocp.subjectTo( AT_END,  droll ==  opts.velFinal    ()[4] );
-//  ocp.subjectTo( AT_END,  dyaw ==  opts.configFinal ()[5] );
+//  ocp.subjectTo( AT_END,  dyaw ==  opts.configFinal ()[3] );
+  ocp.subjectTo( AT_END, dpitch ==  opts.velFinal    ()[4] );
+  ocp.subjectTo( AT_END,  droll ==  opts.velFinal    ()[5] );
 
 //  ocp.subjectTo( AT_END,  p ==  opts.velFinal    ()[3] );
 //  ocp.subjectTo( AT_END,  q ==  opts.velFinal    ()[4] );
