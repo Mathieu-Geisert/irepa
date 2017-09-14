@@ -212,6 +212,7 @@ void initControlAndState( ACADO::OptimizationAlgorithm  & algorithm, OptionsOCP 
   if(opts.withGuessControl()) {  algorithm.initializeControls          (opts.guessControl()); }
   if(opts.withGuessState  ()) {  algorithm.initializeDifferentialStates(opts.guessState()  ); }
 }
+
 void initHorizon( ACADO::OptimizationAlgorithm  & algorithm, OptionsOCP & opts )
 {
   USING_NAMESPACE_ACADO;
@@ -246,6 +247,23 @@ void setupPlots( ACADO::OptimizationAlgorithm  & algorithm, OptionsOCP & opts,
       window.addSubplot( v1, label1.c_str() );
       window.addSubplot( v2, label2.c_str() );
       window.addSubplot( v3, label3.c_str() );
+      algorithm << window;
+    }
+}
+
+void setupPlots( ACADO::OptimizationAlgorithm  & algorithm, OptionsOCP & opts,
+                 std::vector<ACADO::Expression> & Vexpr,
+                 const std::vector<std::string> & Vname)
+{
+  USING_NAMESPACE_ACADO;
+  if( opts.withPlot() )
+    {
+      assert(Vexpr.size() == Vname.size());
+      GnuplotWindow window;
+      for( int loop=0;loop<Vexpr.size();++loop)
+      {
+            window.addSubplot( Vexpr[loop], Vname[loop].c_str() );
+      }
       algorithm << window;
     }
 }
