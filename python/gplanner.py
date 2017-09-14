@@ -10,101 +10,18 @@ from oprm import OptimalPRM
 from grid_policy import GridPolicy,onehot
 from cursor_tricks import FromCursor
 
-from specpath import acadoBinDir,acadoTxtPath
-from bicopter import Bicopter
-from acado_connect import AcadoConnect
+from bicopter_steering import env,acado,config,GraphBicopter,ConnectAcado,BicopterStateDiff,dataRootPath
 
-dataRootPath = 'data/planner/bicopter'
-     
-# --- PENDULUM DOUBLE ------------------------------------------------------------
-# --- PENDULUM DOUBLE ------------------------------------------------------------
-# --- PENDULUM DOUBLE ------------------------------------------------------------
 
-class GraphBicopter(Graph):
-     '''Specialization of Graph to have the display dedicated to double pendulum.'''
-     def __init__(self): Graph.__init__(self)
-
-     def plotState(self,q,v=None,color='r',marker='o',lseg=.1):
-          q = q.flat
-          plt.plot([q[0]+np.cos(q[2])*lseg,q[0]-np.cos(q[2])*lseg],
-                   [q[1]+np.sin(q[2])*lseg,q[1]-np.sin(q[2])*lseg],
-                   linestyle='-',marker=marker,linewidth=1,color=color)
-
-     def plotNode(self,idx,plotstr='k',**kwargs):
-          x = self.x[idx]
-          if x is None: return
-          self.plotState(x,color=plotstr)
-          plt.plot(x[0,0],x[1,0],plotstr,**kwargs)
-
-     def plotEdge(self,idx1,idx2,plotstr='k',withTruePath = False,**kwargs):
-          path = self.states[idx1,idx2]
-          if withTruePath: 
-               plt.plot(path[:,0],path[:,1],plotstr,**kwargs)
-          else: 
-               plt.plot(path[[0,-1],0],path[[0,-1],1],plotstr,**kwargs)
-
-def config(acado,label,env=None):
-     acado.options['thetamax']    = np.pi/2
-     acado.options['printlevel']    = 1
-     if 'shift' in acado.options: del acado.options['shift']
-     if env is not None:
-          acado.options['umax']     = "%.2f %.2f" % tuple([x for x in env.umax])
-          
-     if label == "connect":
-          if 'icontrol' in acado.options: del acado.options['icontrol']
-          acado.debug(False)
-          acado.iter                = 20
-          acado.options['steps']    = 20
-          acado.setTimeInterval(5.)
-
-     elif label == "traj":
-          if 'horizon' in acado.options: del acado.options['horizon']
-          if 'Tmax'    in acado.options: del acado.options['Tmax']
-          acado.debug(False)
-          acado.iter                = 80
-          acado.options['steps']    = 30
-          acado.options['icontrol'] = acadoTxtPath+'guess.clt'
-          
-     elif label == "policy":
-          if 'horizon' in acado.options: del acado.options['horizon']
-          if 'Tmax'    in acado.options: del acado.options['Tmax']
-          acado.debug(False)
-          acado.iter                = 80
-          acado.options['steps']    = 20
-          acado.options['icontrol'] = acadoTxtPath+'guess.clt'
-
-     elif label == "refine":
-          if 'horizon' in acado.options: del acado.options['horizon']
-          if 'Tmax'    in acado.options: del acado.options['Tmax']
-          acado.debug(False)
-          acado.iter                = 80
-          acado.options['steps']    = 20
-          acado.options['icontrol'] = acadoTxtPath+'guess.clt'
-
-class ConnectAcado(ConnectAbstract):
-     def __init__(self,acado):
-          self.acado = acado
-
-     def __call__(self,x1,x2,verbose=False):
-          try: return self.acado.run(x1,x2)
-          except: return False
-
-     def states(self):
-          return self.acado.states()
-     def controls(self): 
-          return self.acado.controls()
-     def cost(self):
-          return self.acado.opttime()
-     def times(self):
-          return self.acado.times()
-     def time(self):
-          return self.acado.opttime()
-
-class BicopterStateDiff:
-     def __call__(self,x1,x2):
-          return x2-x1
+# --- HELPER ---------------------------------------------------------------------
+# --- HELPER ---------------------------------------------------------------------
+# --- HELPER ---------------------------------------------------------------------
 
 def checkPRM(graph,verbose=False):
+     '''
+     Simple helper function that check that boundary points of the PRM are the nodes.
+     Alternative may come from Acado errors.
+     '''
      errors = 0
      for (i0,i1),X in graph.states.items():
           if not np.allclose(X[0 ,:],graph.x[i0].flat):
@@ -117,23 +34,15 @@ def checkPRM(graph,verbose=False):
                errors += 1
      return errors
 
-
 # --- MAIN -----------------------------------------------------------------------
 # --- MAIN -----------------------------------------------------------------------
 # --- MAIN -----------------------------------------------------------------------
 
-LOAD_PRM     = True
-EXTEND_PRM   = [ ]
+LOAD_PRM     = False
+EXTEND_PRM   = [ 1 ]
 LOAD_GRID    = True
 SAMPLE_GRID  = False
 REFINE_GRID  = [ ]
-'''
-EXTEND_PRM   = 0
-LOAD_PRM     = True
-SAMPLE_GRID  = False
-REFINE_GRID  = 0
-'''
-
 
 RANDOM_SEED = 999 #int((time.time()%10)*1000)
 print "Seed = %d" %  RANDOM_SEED
@@ -141,18 +50,6 @@ np .random.seed     (RANDOM_SEED)
 random.seed         (RANDOM_SEED)
 
 plt.ion()
-
-env     = Bicopter(withDisplay=False)
-NX      = 6
-NQ      = 3
-NV      = 3
-
-acado = AcadoConnect(acadoBinDir+"connect_bicopter",
-                     datadir=acadoTxtPath)
-acado.NQ = NQ
-acado.NV = NV
-config(acado,'connect',env)
-
 
 # --- PRM ---
 # --- PRM ---
@@ -165,7 +62,7 @@ prm = PRM(GraphBicopter(),
 prm = OptimalPRM.makeFromPRM(prm,acado=prm.connect.acado,stateDiff=BicopterStateDiff())
 
 prm.graph.addNode(newConnex=True)
-prm.graph.x[0] = zero(NX)
+prm.graph.x[0] = zero(env.nx)
 
 connect = prm.connect
 nearest = prm.nearestNeighbor
@@ -180,7 +77,7 @@ if 1 in EXTEND_PRM:
           prm(20,10,10,True)
           print 'Sleeping 1s ... it is time for a little CTRL-C ',time.ctime()
           time.sleep(1)
-     graph.save(dataRootPath+'_100pts')
+     #graph.save(dataRootPath+'_100pts')
 
 assert(checkPRM(prm.graph,True)==0)
 
@@ -266,7 +163,7 @@ config(acado,'policy')
 acado.setup_async(32,200)
 
 if LOAD_GRID:
-     grid.load(dataRootPath+'/grid_sampled.npy')
+     grid.load(dataRootPath+'/grid.npy')
 
 if SAMPLE_GRID:     
      print 'Sample the grid',time.ctime()
@@ -305,7 +202,7 @@ if 4 in REFINE_GRID:
 # --- MISC ---
 # --- MISC ---
 
-fromcursor = FromCursor(prm,grid,env)
+#fromcursor = FromCursor(prm,grid,env)
 plt.ion()
 
 

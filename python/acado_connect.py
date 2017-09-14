@@ -5,38 +5,24 @@ from numpy.linalg import inv,norm
 from acado_runner import *
 from acado_runner import AcadoRunner
 
-class AcadoConnect(AcadoRunner):
-     def __init__(self,path="/home/nmansard/src/pinocchio/pycado/build/unittest/connect_pendulum",
-                  model=None,data=None,datadir='/tmp/'):
 
-          AcadoRunner.__init__(self,path)
+class InitGuessBuilder:
+     def __init__(self,model=None,data=None):
           self.model = model
-          if self.model is not None: self.data = model.createData()
+          if self.model is not None: 
+               self.data = model.createData()
+               self.NQ   = model.nq
+               self.NV   = model.nv
+               self.NX   = self.NQ+self.NV
 
-          self.options['istate']   = datadir+'guess.stx'
-          self.options['icontrol'] = datadir+'guess.ctl'
-          self.options['ocontrol'] = datadir+'mpc.ctl'
-          self.options['ostate']   = datadir+'mpc.stx'
-          self.options['oparam']   = datadir+'mpc.prm'
-
-          self.setDims()
-          self.withRunningCost     = False     # The problem is Mayer cost.
-
-     def setDims(self):
-          if self.model is None: self.NQ,self.NV = 1,1; return
-          self.NQ = self.model.nq
-          self.NV = self.model.nv
-
-     # --- INIT GUESS ---------------------------------------------------------------------
-     # --- INIT GUESS ---------------------------------------------------------------------
-     # --- INIT GUESS ---------------------------------------------------------------------
-
-     def buildInitGuess(self,x0,x1,jobid=None):
-          T      = self.options['horizon']
-          NSTEPS = self.options['steps']
+     def __call__(self,x0,x1,options):
+          T      = options['horizon']
+          NSTEPS = options['steps']
           DT     = T / NSTEPS
+          NQ,NV,NX = self.NQ,self.NV,self.NX
 
           withControl = self.model is not None and self.data is not None
+          assert(NQ == NV)
 
           N = 3                   # Polynom degree
           C = zero([4,N+1])       # Matrix of t**i coefficients
@@ -48,15 +34,14 @@ class AcadoConnect(AcadoRunner):
           C[2,:] =  [ T**i for i in range(N+1) ]
           C[3,1:] = [ i*T**(i-1) for i in range(1,N+1) ]
           
-          assert(self.NQ == self.NV)
           P = []
           V = []
           A = []
           U = []
-          for iq in range(self.NQ):
+          for iq in range(NQ):
           
-               b[:2] = x0[iq::self.NQ]
-               b[2:] = x1[iq::self.NQ]
+               b[:2] = x0[iq::NQ]
+               b[2:] = x1[iq::NQ]
          
                c = inv(C)*b
 
@@ -69,25 +54,63 @@ class AcadoConnect(AcadoRunner):
 
           X = np.hstack(P+V)
 
-          if 'armature' in self.options:
-               armature = self.options['armature']
+          if 'armature' in options:
+               armature = options['armature']
                dyninv = lambda p,v,a: se3.rnea(self.model,self.data,p,v,a)+armature*a
           else:
                dyninv = lambda p,v,a: se3.rnea(self.model,self.data,p,v,a)
 
           U = np.vstack([ dyninv(p.T,v.T,a.T).T for p,v,a in zip(np.hstack(P),np.hstack(V),np.hstack(A)) ]) \
-              if self.model is not None else []
-              
+              if self.model is not None else None
+
+          # # while horizon T is optimized, timescale should be rescaled between 0 and 1 
+          # # see http://acado.sourceforge.net/doc/html/d4/d29/example_002.html
+          T = np.arange(NSTEPS+1)*T/NSTEPS
+         
+          return X,U,T
+
+
+
+class AcadoConnect(AcadoRunner):
+     def __init__(self,path="/home/nmansard/src/pinocchio/pycado/build/unittest/connect_pendulum",
+                  model=None,data=None,datadir='/tmp/'):
+
+          AcadoRunner.__init__(self,path)
+
+          self.options['istate']   = datadir+'guess.stx'
+          self.options['icontrol'] = datadir+'guess.ctl'
+          self.options['ocontrol'] = datadir+'mpc.ctl'
+          self.options['ostate']   = datadir+'mpc.stx'
+          self.options['oparam']   = datadir+'mpc.prm'
+
+          self.withRunningCost     = False     # The problem is Mayer cost.
+
+          self.guess = InitGuessBuilder(model,data)
+
+     def setDims(self,NQ=None,NV=None):
+          if NQ is None: NQ=self.NQ
+          if NV is None: NV=self.NV
+          self.NQ       = NQ
+          self.NV       = NV
+          self.guess.NQ = NQ
+          self.guess.NV = NV
+          self.guess.NX = NQ+NV
+
+     # --- INIT GUESS ---------------------------------------------------------------------
+     # --- INIT GUESS ---------------------------------------------------------------------
+     # --- INIT GUESS ---------------------------------------------------------------------
+
+     def buildInitGuess(self,x0,x1,jobid=None):
+          X,U,T = self.guess(x0,x1,self.options)
+
           # while horizon T is optimized, timescale should be rescaled between 0 and 1 
           # see http://acado.sourceforge.net/doc/html/d4/d29/example_002.html
-          guessX = np.vstack([ np.arange(NSTEPS+1)/float(NSTEPS), X.T, zero(NSTEPS+1).T ]).T
-          np.savetxt(self.stateFile('i',jobid),guessX)
 
-          if withControl:
-               guessU = np.vstack([ np.arange(NSTEPS+1)/float(NSTEPS),   U.T ]).T
-               np.savetxt(self.controlFile('i',jobid),guessU)
+          np.savetxt(self.stateFile('i',jobid),np.vstack([T/T[-1], X.T]).T)
+          if U is not None and 'icontrol' in self.options:
+               np.savetxt(self.controlFile('i',jobid),np.vstack([T/T[-1], U.T]).T)
 
-          return X,U
+          return X,U,T
 
      # --- RUN WITH INIT GUESS ------------------------------------------------------------
      # --- RUN WITH INIT GUESS ------------------------------------------------------------
