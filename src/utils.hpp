@@ -14,7 +14,7 @@ struct OptionsOCP
   int NQ, NV, NU;
   po::options_description desc;
 
-  
+
 
   OptionsOCP()
     : vm(),Us(),Xs(),NQ(-1),NV(-1),NU(-1),desc("Allowed options")
@@ -33,6 +33,7 @@ struct OptionsOCP
       ("icontrol,i", po::value<std::string>(),                                    "Input controls (guess)")
       ("istate,j",   po::value<std::string>(),                                    "Input states (guess)")
       ("horizon,T",  po::value<double     >()->default_value(1.0),                "Horizon length")
+      ("acadoKKT",   po::value<double     >()->default_value(1e-6),               "acado KKT convergence criteria")
       ("Tmin",       po::value<double     >()->default_value(0.1),                "Horizon length minimal")
       ("Tmax",       po::value<double     >(),                                    "Horizon length maximal")
       ("friction",   po::value<std::vector<double> >()->multitoken()
@@ -58,11 +59,11 @@ struct OptionsOCP
     addExtraOptions();
 
     po::store(po::parse_command_line(argc, argv, desc,
-                                     po::command_line_style::unix_style 
+                                     po::command_line_style::unix_style
                                      ^ po::command_line_style::allow_short), vm);
-    po::notify(vm);    
-    
-    if (vm.count("help")) 
+    po::notify(vm);
+
+    if (vm.count("help"))
       {
         std::cout << desc << "\n";
         exit(0);
@@ -70,6 +71,7 @@ struct OptionsOCP
   }
 
   const double & T()        { return vm["horizon"   ].as<double>(); }
+  const double & acadoKKT() { return vm["acadoKKT"  ].as<double>(); }
   const double & Tmin()     { return vm["Tmin"      ].as<double>(); }
   const double & decay()    { return vm["decay"     ].as<double>(); }
   const int & steps()       { return vm["steps"     ].as<int>   (); }
@@ -128,8 +130,8 @@ struct OptionsOCP
     else // Init config from state file.
       {
         assert(NQ>0);
-        a_p0.resize(NQ); 
-        for( int loop=0;loop<NQ;++loop) 
+        a_p0.resize(NQ);
+        for( int loop=0;loop<NQ;++loop)
           a_p0[loop] = Xs(0,loop);
       }
     return a_p0;
@@ -147,8 +149,8 @@ struct OptionsOCP
       {
         const uint nbp = Xs.getNumPoints();
         assert(NQ>0);
-        a_p0.resize(NQ); 
-        for( int loop=0;loop<NQ;++loop) 
+        a_p0.resize(NQ);
+        for( int loop=0;loop<NQ;++loop)
           a_p0[loop] = Xs(nbp-1,loop);
       }
     return a_p0;
@@ -165,8 +167,8 @@ struct OptionsOCP
     else // Init vel from state file.
       {
         assert(NQ>0); assert(NV>0);
-        a_v0.resize(NV); 
-        for( int loop=0;loop<NV;++loop) 
+        a_v0.resize(NV);
+        for( int loop=0;loop<NV;++loop)
           a_v0[loop] = Xs(0,NQ+loop);
       }
     return a_v0;
@@ -184,8 +186,8 @@ struct OptionsOCP
       {
         assert(NQ>0); assert(NV>0);
         const uint nbp = Xs.getNumPoints();
-        a_v0.resize(NV); 
-        for( int loop=0;loop<NV;++loop) 
+        a_v0.resize(NV);
+        for( int loop=0;loop<NV;++loop)
           a_v0[loop] = Xs(nbp-1,NQ+loop);
       }
     return a_v0;
@@ -203,7 +205,7 @@ struct OptionsOCP
     for( int loop=0;loop<velFinal ().size();++loop) os << velFinal ()[loop] << " ";
     os << std::endl;
   }
-    
+
 
 };
 
@@ -229,10 +231,11 @@ void initAlgorithmStandardParameters( ACADO::OptimizationAlgorithm  & algorithm,
   algorithm.set( PRINT_COPYRIGHT, 0);
   algorithm.set( INTEGRATOR_TYPE,INT_RK45);
   algorithm.set( MAX_NUM_ITERATIONS, opts.iter() );
+  algorithm.set( KKT_TOLERANCE, opts.acadoKKT());
 }
 
 void setupPlots( ACADO::OptimizationAlgorithm  & algorithm, OptionsOCP & opts,
-                 ACADO::Expression & v0, ACADO::Expression & v1, 
+                 ACADO::Expression & v0, ACADO::Expression & v1,
                  ACADO::Expression & v2, ACADO::Expression & v3,
                  const std::string label0 = "Angle q0",
                  const std::string label1 = "Angle q1",
@@ -300,7 +303,7 @@ void outputParameters( ACADO::OptimizationAlgorithm  & algorithm, OptionsOCP & o
 struct Timer
 {
   boost::posix_time::ptime tstart;
-  Timer() 
+  Timer()
   {
     tstart = boost::posix_time::microsec_clock::local_time();
   }
