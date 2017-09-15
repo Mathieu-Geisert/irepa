@@ -97,7 +97,7 @@ struct OptionsOCP
   const std::vector<double> friction()  { return vm["friction"].as< std::vector<double> >(); }
 
   bool withGuessControl () { return vm.count("icontrol")>0; }
-  bool withGuessState   () { return vm.count("istate  ")>0; }
+  bool withGuessState   () { return vm.count("istate"  )>0; }
   bool withOutputControl() { return vm.count("ocontrol")>0; }
   bool withOutputState  () { return vm.count("ostate"  )>0; }
   bool withOutputParam  () { return vm.count("oparam"  )>0; }
