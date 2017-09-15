@@ -24,25 +24,39 @@ class InitGuessBuilder:
           withControl = self.model is not None and self.data is not None
           assert(NQ == NV)
 
+          # try:
+          # Quasistatic initial guess
+          withControl = True
+          Ustat = 2.5 * 9.81 / 4.
+          U = np.ones([4, NSTEPS+1]) * Ustat
+          X = np.zeros([NX, NSTEPS+1])
+          for i in range(NSTEPS+1):
+               X[0:3, i] = (1. - (float(i) / float(NSTEPS))) * x0[0:3].T + float(i) / float(NSTEPS) * x1[0:3].T
+               X[5:8, i] = (1. - (float(i) / float(NSTEPS))) * x0[5:8].T + float(i) / float(NSTEPS) * x1[5:8].T
+
+          T = np.arange(NSTEPS + 1) / float(NSTEPS)
+          # X = np.zeros([NX, NSTEPS+1])
+          return X.T, U.T, T
+          # except:
           N = 3                   # Polynom degree
           C = zero([4,N+1])       # Matrix of t**i coefficients
           b = zero(4)             # Vector of x,xdot references
- 
+
           t = 0.0
           C[0,:] =  [ t**i for i in range(N+1) ]
           C[1,1:] = [ i*t**(i-1) for i in range(1,N+1) ]
           C[2,:] =  [ T**i for i in range(N+1) ]
           C[3,1:] = [ i*T**(i-1) for i in range(1,N+1) ]
-          
+
           P = []
           V = []
           A = []
           U = []
           for iq in range(NQ):
-          
+
                b[:2] = x0[iq::NQ]
                b[2:] = x1[iq::NQ]
-         
+
                c = inv(C)*b
 
                P.append( np.vstack([ [t**i \
@@ -63,10 +77,10 @@ class InitGuessBuilder:
           U = np.vstack([ dyninv(p.T,v.T,a.T).T for p,v,a in zip(np.hstack(P),np.hstack(V),np.hstack(A)) ]) \
               if self.model is not None else None
 
-          # # while horizon T is optimized, timescale should be rescaled between 0 and 1 
+          # # while horizon T is optimized, timescale should be rescaled between 0 and 1
           # # see http://acado.sourceforge.net/doc/html/d4/d29/example_002.html
           T = np.arange(NSTEPS+1)*T/NSTEPS
-         
+          print X.shape, T.shape
           return X,U,T
 
 
