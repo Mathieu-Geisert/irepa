@@ -40,7 +40,7 @@ def checkPRM(graph,verbose=False):
 
 LOAD_PRM     = False
 EXTEND_PRM   = [ 1 ]
-LOAD_GRID    = True
+LOAD_GRID    = False
 SAMPLE_GRID  = False
 REFINE_GRID  = [ ]
 
@@ -74,7 +74,7 @@ if LOAD_PRM:
 if 1 in EXTEND_PRM:
      print '### Initial sampling of PRM',time.ctime()
      for i in range(2):
-          prm(20,10,10,True)
+          prm(10,10,10,True)
           print 'Sleeping 1s ... it is time for a little CTRL-C ',time.ctime()
           time.sleep(1)
      #graph.save(dataRootPath+'_100pts')

@@ -24,12 +24,12 @@ class GraphQuadcopter(Graph):
 
     def plotState(self, q, v=None, color='r', marker='o', lseg=.1):
         q = q.flat
-        plt.plot([q[0]-0.5*np.cos(q[5]), q[0]+0.5*np.cos(q[5])],
-                 [q[2]+0.5*np.sin(q[5]), q[2]-0.5*np.sin(q[5])],
+        plt.plot([q[0]-0.1*np.cos(q[5]), q[0]+0.1*np.cos(q[5])],
+                 [q[1]+0.1*np.sin(q[5]), q[1]-0.1*np.sin(q[5])],
                  linestyle='-', marker=marker, linewidth=1, color=color)
-        plt.plot([q[1]-0.5*np.cos(q[4]), q[1]+0.5*np.cos(q[4])],
-                 [q[2]+0.5*np.sin(q[4]), q[2]-0.5*np.sin(q[4])],
-                 linestyle='--', marker=marker, linewidth=1, color=color)
+        # plt.plot([q[1]-0.5*np.cos(q[4]), q[1]+0.5*np.cos(q[4])],
+        #          [q[2]+0.5*np.sin(q[4]), q[2]-0.5*np.sin(q[4])],
+        #          linestyle='--', marker=marker, linewidth=1, color=color)
 
     def plotNode(self, idx, plotstr='k', **kwargs):
         x = self.x[idx]
@@ -48,6 +48,7 @@ class GraphQuadcopter(Graph):
 def config(acado, label, env=None):
     acado.options['maxAngle'] = np.pi / 2
     acado.options['printlevel'] = 1
+    # acado.options['g'] = env.g
     if env is not None:
         acado.setDims(env.nq, env.nv)
     if 'shift' in acado.options: del acado.options['shift']
@@ -55,10 +56,12 @@ def config(acado, label, env=None):
         acado.options['umax'] = "%.2f %.2f %.2f %.2f" % tuple([x for x in env.umax])
 
     if label == "connect":
-        if 'icontrol' in acado.options: del acado.options['icontrol']
+        # if 'icontrol' in acado.options: del acado.options['icontrol']
         acado.debug(False)
-        acado.iter = 20
+        acado.iter = 60
         acado.options['steps'] = 20
+        acado.options['acadoKKT'] = 0.0001
+        acado.options['icontrol'] = acadoTxtPath + 'guess.clt'
         acado.setTimeInterval(5.)
 
     elif label == "traj":

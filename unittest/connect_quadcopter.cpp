@@ -19,16 +19,78 @@ struct OptionsQuadcopter : public OptionsOCP
   const double & maxAngleSing()        { return vm["maxAngleSing"].as<double>(); }
 };
 
+void outputControlAndStateWithoutLagrangeTerm( ACADO::OptimizationAlgorithm  & algorithm, OptionsOCP & opts )
+{
+  USING_NAMESPACE_ACADO;
+  if( opts.withOutputControl() )
+    {
+      VariablesGrid Us;
+      algorithm.getControls( Us );
+      std::ofstream of(opts.outputControlFile().c_str());
+      Us.print( of,"","","\n",10,10,"\t","\n");
+    }
+
+  if( opts.withOutputState() )
+    {
+      VariablesGrid Xs_full;
+      algorithm.getDifferentialStates( Xs_full );
+      VariablesGrid Xs(10, Xs_full.getTimePoints());
+      int idex = 0;
+      for (int i=0; i<12; i++) //Do not copy last variable = LagrangeTerm
+      {
+          if (i==5 || i==11) continue; //Do not copy yaw and r
+          for (int j=0; j<Xs_full.getTimePoints().getNumPoints(); j++)
+          {
+            Xs(j, idex) = Xs_full(j, i);
+          }
+          idex++;
+      }
+      std::ofstream of(opts.outputStateFile().c_str());
+      Xs.print( of,"","","\n",10,10,"\t","\n");
+    }
+}
+
+void initControlAndStateQuadcopter( ACADO::OptimizationAlgorithm  & algorithm, OptionsOCP & opts )
+{
+    USING_NAMESPACE_ACADO;
+    if(opts.withGuessControl()) {  algorithm.initializeControls          (opts.guessControl());}
+    if(opts.withGuessState  ())
+    {
+        VariablesGrid Xs(opts.guessState());
+        VariablesGrid Xs_full(13, Xs.getTimePoints());
+        Xs_full.setAll(0);
+        for (int i=0; i<Xs_full.getTimePoints().getNumPoints(); i++)
+        {
+            Xs_full(i,0) = Xs(i,0);
+            Xs_full(i,1) = Xs(i,1);
+            Xs_full(i,2) = Xs(i,2);
+            Xs_full(i,3) = Xs(i,3);
+            Xs_full(i,4) = Xs(i,4);
+            Xs_full(i,6) = Xs(i,5);
+            Xs_full(i,7) = Xs(i,6);
+            Xs_full(i,8) = Xs(i,7);
+            Xs_full(i,9) = Xs(i,8);
+            Xs_full(i,10) = Xs(i,9);
+
+        }
+        algorithm.initializeDifferentialStates(Xs_full);
+    }
+}
+
+
+
 int main(int argc, const char ** argv )
 {
   USING_NAMESPACE_ACADO;
   Timer timer;
 
+
+
   /* --- OPTIONS ----------------------------------------------------------------------------- */
   /* --- OPTIONS ----------------------------------------------------------------------------- */
   /* --- OPTIONS ----------------------------------------------------------------------------- */
   OptionsQuadcopter opts; opts.parse(argc,argv);
-  opts.NQ = 6; opts.NV = 6; opts.NU = 4;
+  opts.NQ = 5; opts.NV = 5; opts.NU = 4;
   assert( opts.friction().size() == 2);
   assert( opts.umax()    .size() == 4);
 
@@ -58,7 +120,7 @@ int main(int argc, const char ** argv )
   //                                         q is the rotational speed around the local Y axis,
   //                                         r is the rotational speed around the local Z axis,
 
-  DifferentialState        qx, qy, qz, yaw, pitch, roll, vx, vy, vz, p, q, r;
+  DifferentialState        qx, qy, qz, roll, pitch, yaw, vx, vy, vz, p, q, r;
   Control                  f1,f2,f3,f4;
   Parameter                T;
   DifferentialEquation     f( 0.0, T );   // the differential equation
@@ -72,6 +134,7 @@ int main(int argc, const char ** argv )
   OCP ocp( 0.0, T, opts.steps() );                        // time horizon of the OCP: [0,T]
 
   ocp.minimizeMayerTerm( T );
+  ocp.minimizeLagrangeTerm( 1000*yaw*yaw + 100*dyaw*dyaw );      //WARNING: LagrangeTerm is added as a additionnal state...
 
   f << dot(qx) == vx;
   f << dot(qy) == vy;
@@ -132,15 +195,15 @@ int main(int argc, const char ** argv )
   ocp.subjectTo( AT_START,  vz  ==  opts.velInit    ()[2] );
 
 //  ocp.subjectTo( AT_START,  yaw ==  opts.configInit ()[3] );
-  ocp.subjectTo( AT_START,  roll ==  opts.configInit ()[4] );
-  ocp.subjectTo( AT_START, pitch ==  opts.configInit ()[5] );
+  ocp.subjectTo( AT_START,  roll ==  opts.configInit ()[3] );
+  ocp.subjectTo( AT_START, pitch ==  opts.configInit ()[4] );
 
 //  ocp.subjectTo( AT_START,  dyaw ==  opts.configInit ()[3] );
-  ocp.subjectTo( AT_START,dpitch ==  opts.velInit    ()[4] );
-  ocp.subjectTo( AT_START, droll ==  opts.velInit    ()[5] );
+//  ocp.subjectTo( AT_START,dpitch ==  opts.velInit    ()[3] );
+//  ocp.subjectTo( AT_START, droll ==  opts.velInit    ()[4] );
 
-//  ocp.subjectTo( AT_START,  p ==  opts.velInit    ()[3] );
-//  ocp.subjectTo( AT_START,  q ==  opts.velInit    ()[4] );
+  ocp.subjectTo( AT_START,  p ==  opts.velInit    ()[3] );
+  ocp.subjectTo( AT_START,  q ==  opts.velInit    ()[4] );
 //  ocp.subjectTo( AT_START,  r ==  opts.velInit    ()[5] );
 
   //End
@@ -154,15 +217,15 @@ int main(int argc, const char ** argv )
   ocp.subjectTo( AT_END  ,  vz  ==  opts.velFinal   ()[2] );
 
 //  ocp.subjectTo( AT_END,  yaw ==  opts.configFinal ()[3] );
-  ocp.subjectTo( AT_END,   roll ==  opts.configFinal ()[4] );
-  ocp.subjectTo( AT_END,  pitch ==  opts.configFinal ()[5] );
+  ocp.subjectTo( AT_END,   roll ==  opts.configFinal ()[3] );
+  ocp.subjectTo( AT_END,  pitch ==  opts.configFinal ()[4] );
 
 //  ocp.subjectTo( AT_END,  dyaw ==  opts.configFinal ()[3] );
-  ocp.subjectTo( AT_END, dpitch ==  opts.velFinal    ()[4] );
-  ocp.subjectTo( AT_END,  droll ==  opts.velFinal    ()[5] );
+//  ocp.subjectTo( AT_END, dpitch ==  opts.velFinal    ()[3] );
+//  ocp.subjectTo( AT_END,  droll ==  opts.velFinal    ()[4] );
 
-//  ocp.subjectTo( AT_END,  p ==  opts.velFinal    ()[3] );
-//  ocp.subjectTo( AT_END,  q ==  opts.velFinal    ()[4] );
+  ocp.subjectTo( AT_END,  p ==  opts.velFinal    ()[3] );
+  ocp.subjectTo( AT_END,  q ==  opts.velFinal    ()[4] );
 //  ocp.subjectTo( AT_END,  r ==  opts.velFinal    ()[5] );
 
 
@@ -170,17 +233,37 @@ int main(int argc, const char ** argv )
 
   OptimizationAlgorithm algorithm(ocp);
 
-  const std::vector<std::string> plotNames = {"X", "Y", "Z", "roll", "pitch"};
-  std::vector<ACADO::Expression> plotExpr = {qx, qy, qz, roll, pitch};
+  const std::vector<std::string> plotNames = {"X", "Y", "Z", "roll", "pitch", "yaw"};
+  std::vector<ACADO::Expression> plotExpr = {qx, qy, qz, roll, pitch, yaw};
 
   setupPlots(algorithm,opts,plotExpr,plotNames);
-  initControlAndState(algorithm,opts);
+
+  initControlAndStateQuadcopter(algorithm,opts);
+
+  //Full static inital guess
+//  Grid timeGrid(0.0,1.,opts.steps()+1);
+//  VariablesGrid x_init(10, timeGrid);
+//  x_init.setAll(0);
+//  VariablesGrid u_init(4, timeGrid);
+//  VariablesGrid param(1,timeGrid);
+//  param.setAll(15);
+//  for (int i = 0 ; i<opts.steps()+1 ; i++ ) {
+//      u_init(i,0) = 6.13;
+//      u_init(i,1) = 6.13;
+//      u_init(i,2) = 6.13;
+//      u_init(i,3) = 6.13;
+//  }
+//  algorithm.initializeDifferentialStates(x_init);
+//  algorithm.initializeControls(u_init);
+//  algorithm.initializeParameters(param);
+
   initHorizon(algorithm,opts);
   initAlgorithmStandardParameters(algorithm,opts);
 
   returnValue retval = algorithm.solve();
 
-  outputControlAndState(algorithm,opts);
+//  outputControlAndState(algorithm,opts);
+  outputControlAndStateWithoutLagrangeTerm(algorithm,opts);
   outputParameters(algorithm,opts);
 
   //  --- RETURN --------------------------
