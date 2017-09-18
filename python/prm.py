@@ -254,7 +254,7 @@ class PRM:
                if connect(graph.x[idx2],x):
                     edges.append( [ idx2, idx, connect.results() ] )
 
-          edges = sorted(edges, key = lambda e: e[2])[:min(len(edges),NBEST)]
+          edges = sorted(edges, key = lambda e: e[2].cost)[:min(len(edges),NBEST)]
           for idx1, idx2, edge in edges:
                graph.addEdge(idx1,idx2,+1,**edge._asdict())
                graph.renameConnex(graph.connex[idx2],graph.connex[idx1])
