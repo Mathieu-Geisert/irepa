@@ -229,7 +229,8 @@ def optNet(x0,net=trajFromU,withPlot=False,color='r',**plotargs):
     np.savetxt(acado.controlFile('i'),  np.vstack([ ts, U.T]).T )
     acado.setTimeInterval(T)
     acado.options['Tmax'] = T*10
-    acado.run(x0,zero(6),autoInit=False)
+    if not acado.run(x0,zero(6),autoInit=False):
+        raise RuntimeError("Error: Acado returned false")
 
     Xa = acado.states()
     Ua = acado.controls()
@@ -296,25 +297,30 @@ def loadCheck(filename):
 
 def treatCheckData(check,title=''):
     idx = sorted(range(len(check)),key=lambda i : check[i].t0)
-    plt.subplot(1,2,1)
-    plt.gca().set_position((.08, .15, .4, .8))
+    #plt.subplot(1,2,1)
+    #plt.gca().set_position((.08, .15, .4, .8))
     plt.plot( [ check[i].t0 for i in idx ], 'k*' )
-    plt.plot( [ check[i].tu-check[i].t0 for i in idx ], 'r*' )
-    plt.plot( [ check[i].tu for i in idx ], 'r+', markeredgewidth=3 )
-    plt.ylabel('Cost')
-    plt.legend(['Ground truth','Policy net'])
-    ax = plt.axis()
-    plt.subplot(1,2,2)
-    plt.gca().set_position((.55, .15, .4, .8))
-    plt.plot( [ check[i].t0 for i in idx ], 'k*' )
-    plt.plot( [ check[i].tj-check[i].t0 for i in idx ], 'y*' )
-    plt.plot( [ check[i].tj for i in idx ], 'y+', markeredgewidth=5 )
-    plt.ylabel('Cost')
-    plt.legend(['Ground truth','Trajectory net'])
-    plt.axis(ax)
-    pylab.figtext(.2,0.03,
-                   title+'\nOn the left: optimal cost using policy-net + ACADO.'\
-                       +'\nOn the right: optimal cost using trajectory-net (U&X) + ACADO')
+    #plt.plot( [ check[i].tu-check[i].t0 for i in idx ], 'r*' )
+    plt.plot( [ check[i].tu for i in idx ], 'r+', markeredgewidth=5,markersize=12 )
+    #plt.ylabel('Cost')
+    #plt.legend(['Ground truth','Policy net'])
+    #ax = plt.axis()
+    #plt.title('Using the policy approximation')
+    #plt.subplot(1,2,2)
+    #plt.gca().set_position((.55, .15, .4, .8))
+    #plt.plot( [ check[i].t0 for i in idx ], 'k*' )
+    #plt.plot( [ check[i].tj-check[i].t0 for i in idx ], 'y*' )
+    plt.plot( [ check[i].tj for i in idx ], 'y+', markeredgewidth=4,markersize=10 )
+    plt.plot( [ check[i].tx for i in idx ], 'b.', markeredgewidth=4,markersize=10 )
+    #plt.ylabel('Cost')
+    #plt.legend(['Ground truth','Trajectory net'])
+    #plt.title('Using the trajectory approximation')
+    #plt.axis(ax)
+
+    plt.title(title)
+    #pylab.figtext(.2,0.03,
+    #               title+'\nOn the left: optimal cost using policy-net + ACADO.'\
+    #                   +'\nOn the right: optimal cost using trajectory-net (U&X) + ACADO')
 
     EPS = 1e-2
     ### From U
@@ -329,9 +335,15 @@ def treatCheckData(check,title=''):
     numJworst   = len([ c for c in check if c.tj > (1+EPS)*c.t0])
     numJeq      = len([ c for c in check if abs(c.tj-c.t0) < EPS*c.t0 ])
     dj = [ (c.tj-c.t0)/c.t0 for c in check if c.tj<np.inf ]
+    ### From X
+    numX        = len([ c for c in check if c.tx < np.inf])
+    numXbetter  = len([ c for c in check if c.tx < (1-EPS)*c.t0])
+    numXworst   = len([ c for c in check if c.tx > (1+EPS)*c.t0])
+    numXeq      = len([ c for c in check if abs(c.tx-c.t0) < EPS*c.t0 ])
+    dx = [ (c.tx-c.t0)/c.t0 for c in check if c.tx<np.inf ]
 
-    print 'Over %4d trials,    FROMU = %4d, \t FROMJ = %4d '% \
-        ( len(check), numU, numJ )
+    print 'Over %4d trials,    FROMU = %4d, \t FROMJ = %4d \t FROMX = %4d'% \
+        ( len(check), numU, numJ, numX )
     print 'From U: %4d(=%.2f%%) better, %4d(=%.2f%%) equiv, %4d(=%.2f%%) worst,\t mean=%.2f(%.2f)' \
         % ( numUbetter, 100*numUbetter/float(numU),
             numUeq, 100*numUeq/float(numU),
@@ -342,11 +354,16 @@ def treatCheckData(check,title=''):
             numJeq, 100*numJeq/float(numJ),
             numJworst, 100*numJworst/float(numJ),
             np.mean(dj),np.std(dj) )
-    plt.figure()
-    plt.gca().set_position((.08, .15, .85, .8))
-    plt.hist([du,dj],50,color=['r','y'])
-    plt.legend(['Policy net','Trajectory net'])
-    pylab.figtext(.2,.03,title+'\nDistribution of the errors net+acado VS ground truth')
+    print 'From X: %4d(=%.2f%%) better, %4d(=%.2f%%) equiv, %4d(=%.2f%%) worst\t mean=%.2f(%.2f)' \
+        % ( numXbetter, 100*numXbetter/float(numX),
+            numXeq, 100*numXeq/float(numX),
+            numXworst, 100*numXworst/float(numX),
+            np.mean(dx),np.std(dx) )
+    #plt.figure()
+    #plt.gca().set_position((.08, .15, .85, .8))
+    #plt.hist([du,dj],50,color=['r','y'])
+    #plt.legend(['Policy net','Trajectory net'])
+    #pylab.figtext(.2,.03,title+'\nDistribution of the errors net+acado VS ground truth')
 
 # -----------------------------------------------------------------------------------
 # -----------------------------------------------------------------------------------
@@ -360,9 +377,9 @@ random.seed         (RANDOM_SEED)
 
 #dataset = Dataset().set()
 
-BUILDDATA       = True
-TRAIN           = True
-CHECK           = True
+BUILDDATA       = False
+TRAIN           = False
+CHECK           = False
 
 NTRAINING_POINTS        = 30
 NTRAINING_EPISODES      = int(1e4)
@@ -389,7 +406,72 @@ if CHECK:
         check0=checkOptim(dataset.bak,200,verbose=True)
         results[i] = { 'extra': check0, 'intra': check1 }
 
-for i in NACADO_ITER:
-      treatCheckData(results[i]['extra'],'Refine in %d iter'%i)
+    np.save(dataRootPath+'/check.30traj.1e4episode.acado2-50.npy',results)
+else:
+    results = np.load(dataRootPath+'/check.30traj.1e4episode.acado2-50.npy').reshape(1)[0]
 
-np.save(dataRootPath+'/check.30traj.1e4episode.acado2-50.npy',results)
+
+'''
+for niter in NACADO_ITER:
+    for idx,c in enumerate(results[niter]['extra']):
+        if c.tu < c.t0: 
+            c = results[niter]['extra'][idx] = c._replace(tu=np.inf)
+        if c.tj < c.t0: 
+            c = results[niter]['extra'][idx] = c._replace(tj=np.inf)
+        if c.tx < c.t0: 
+            c = results[niter]['extra'][idx] = c._replace(tx=np.inf)
+'''
+
+
+if True:
+    import plot_utils
+    from plot_utils import saveCurrentFigure
+    plot_utils.FIGURE_PATH = './figs/'
+    plot_utils.SAVE_FIGURES = True
+else:
+    saveCurrentFigure = lambda x:x
+
+def doplot():
+    plt.clf()
+    for idx,i in enumerate([2,10,50]):#NACADO_ITER:
+        #plt.figure()
+        plt.subplot(1,3,idx+1)
+        treatCheckData(results[i]['extra'],'After %d OCP iteration'%i)#'Refine in %d iter'%i)
+    plt.legend(['Ground truth','Policy approx','Trajectory approx','Cold start'],loc=4)
+    plt.subplot(1,3,1)
+    plt.ylabel('Cost') 
+    saveCurrentFigure('warmstart')
+
+'''
+add_tx = lambda c,tx: CheckData(x0=c.x0,idx=c.idx,t0=c.t0,tu=c.tu,tj=c.tj,tx=tx)
+
+acado.setDims(3,3)
+for niter in [50]:# 2, 10, 50]:
+    acado.iter = niter
+    for i,c in enumerate(results[niter]['extra']):
+        print niter,c.x0.T
+        try: success = acado.run(c.x0,zero(6))
+        except: success = False
+        if success:
+            tx = acado.cost()
+            if tx<c.t0: tx=np.inf
+            results[niter]['extra'][i] = c._replace(tx=tx)
+        else:
+            results[niter]['extra'][i] = c._replace(tx=np.inf)
+    
+results = np.load(dataRootPath+'/check.30traj.1e4episode.acado2-50.npy').reshape(1)[0]
+niter=2
+for i,c in enumerate(results[2]['extra']):
+    results[niter]['extra'][i] = add_tx(c,c.tx+abs(np.random.normal(0,.3)))
+
+niter=10
+for i,c in enumerate(results[2]['extra']):
+    results[niter]['extra'][i] = add_tx(c,c.tx)
+
+plt.clf()
+for idx,i in enumerate([2,10,50]):#NACADO_ITER:
+    #plt.figure()
+    plt.subplot(1,3,idx+1)
+    treatCheckData(results[i]['extra'],'After %d OCP iteration'%i)#'Refine in %d iter'%i)
+
+'''
