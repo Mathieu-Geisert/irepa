@@ -13,10 +13,13 @@ struct OptionsQuadcopter : public OptionsOCP
       ("maxAngle",       po::value<double>()->default_value(1.5707963267948967),         "Max angles for roll and pitch");
     desc.add_options()
       ("maxAngleSing",   po::value<double>()->default_value(1.5707963268),         "Max angle for the singular axis i.e pitch");
+    desc.add_options()
+      ("sphericalObstacle",   po::value<std::vector<double> >()->multitoken(),     "Spherical obstacle: size, position x, position y, position z.");
   }
-
+  const std::vector<double> sphericalObstacle()      { return vm["sphericalObstacle"].as< std::vector<double> >(); }
   const double & maxAngle()        { return vm["maxAngle"].as<double>(); }
   const double & maxAngleSing()        { return vm["maxAngleSing"].as<double>(); }
+  bool withSphericalObstacle()   { return vm.count("sphericalObstacle")>0; }
 };
 
 void outputControlAndStateWithoutLagrangeTerm( ACADO::OptimizationAlgorithm  & algorithm, OptionsOCP & opts )
@@ -172,8 +175,6 @@ int main(int argc, const char ** argv )
       ocp.subjectTo( -opts.maxAngle()  <= pitch <=  opts.maxAngle()   );
   }
 
-  //Out[64]: '/home/nmansard/src/pinocchio/pycado/build/unittest/connect_quadcopter --icontrol=/media/ramdisk/acado/process_3092/guess.clt --umax=25.00 25.00 25.00 25.00 --ocontrol=/media/ramdisk/acado/process_3092/mpc.ctl --ostate=/media/ramdisk/acado/process_3092/mpc.stx --plot --Tmin=0.001 --iter=80 --maxAngle=1.57079632679 --acadoKKT=0.0001 --istate=/media/ramdisk/acado/process_3092/guess.stx --steps=20 --printlevel=2 --oparam=/media/ramdisk/acado/process_3092/mpc.prm --initpos=1.33210438965793986910 0.13778088163072554906 0.64432925172179356110 0.28525541992832570415 -0.28881288677532768183 --initvel=-0.90930527914862102623 0.49287897362600802120 -0.70437751649159840994 0.11160754548927977192 0.76089588652849715622 --finalpos=0.57736691356793989893 0.37999095584072550835 1.16241229530179346341 0.94238062408832568018 0.56453766202467225988 --finalvel=-1.08922746119862079439 -0.28073074285399196581 0.41088645728840161864 -0.31934786656072022826 0.91267344654849724694 --horizon=1.7155258290'
-
   //Time boundaries
   ocp.subjectTo( opts.Tmin()  <= T  <= opts.Tmax()  );
 
@@ -222,6 +223,18 @@ int main(int argc, const char ** argv )
   ocp.subjectTo( AT_END,  q ==  opts.velFinal    ()[4] );
 //  ocp.subjectTo( AT_END,  r ==  opts.velFinal    ()[5] );
 
+  //ADD OBSTACLE AVOIDANCE CONSTRAINT
+  if (opts.withSphericalObstacle())
+  {
+      std::vector<double> obs = opts.sphericalObstacle();
+      //Position Constraint
+      ocp.subjectTo( pow(obs[0], 2) <= square(qx-obs[1]) + square(qy-obs[2]) + square(qz-obs[3]) );
+
+      //Position + speed*half_time_step Constraint
+      ocp.subjectTo( pow(obs[0], 2) <= square(qx+vx*T/opts.steps()-obs[1]) + square(qy+vy*T/opts.steps()-obs[2])
+                                        + square(qz+vz*T/opts.steps()-obs[3]) );
+
+  }
 
   //  --- SETUP SOLVER --------------------
 
@@ -267,7 +280,3 @@ int main(int argc, const char ** argv )
   std::cout << "###### Return["<<int(retval)<<"] JobID=" << opts.jobid() << timer << std::endl;
   return (int)retval;
 }
-
-/*
-/home/nmansard/src/pinocchio/pycado/build/unittest/connect_quadcopter --Tmax=20.0  --umax=12.50 12.50 12.50 12.50 --ocontrol=/media/ramdisk/acado/process_7051/mpc.ctl --ostate=/media/ramdisk/acado/process_7051/mpc.stx --plot --Tmin=0.001  --maxAngle=1.57079632679 --acadoKKT=0.0001  --steps=20 --horizon=8.3508798106e-01 --printlevel=2 --oparam=/media/ramdisk/acado/process_7051/mpc.prm --initpos=0.1 0 0 0 0  --initvel=0 0 0 0 0  --finalpos=0 0 0 0 0  --finalvel=0 0 0 0 0  --iter=2000 --istate=/media/ramdisk/acado/process_7051/copy.stx --icontrol=/media/ramdisk/acado/process_7051/copy.ctl
-*/
