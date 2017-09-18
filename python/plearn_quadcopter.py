@@ -6,6 +6,11 @@ import random
 import matplotlib.pylab as plt
 from collections import namedtuple
 import pylab
+from prm import PRM,Graph,NearestNeighbor,DistanceSO3
+from oprm import OptimalPRM
+from specpath import acadoBinDir, acadoTxtPath
+from acado_connect import AcadoConnect
+from quadcopter_steering import env,acado,config,GraphQuadcopter,ConnectAcado,QuadcopterStateDiff,dataRootPath
 
 plt.ion()
 
@@ -25,9 +30,6 @@ UBOUND = [env.umin[0], env.umax[0]]
 # --- DATA ---------------------------------------------------------
 # --- DATA ---------------------------------------------------------
 
-dataRootPath = 'data/planner/quadcopter_30x30'
-from prm import PRM, Graph
-
 
 def subsample(X, N):
     '''Subsample in N iterations the trajectory X. The output is a 
@@ -45,12 +47,11 @@ def subsample(X, N):
 
 
 class Dataset:
-    def __init__(self, datafile=dataRootPath):
-        self.prm = PRM(Graph(), *[None] * 4)
-        self.prm.graph.load(dataRootPath)
+    def __init__(self, graph):
+        self.graph=graph
 
     def set(self):
-        graph = self.prm.graph
+        graph = self.graph
 
         x0s = []  # init points
         x1s = []  # term points
@@ -158,28 +159,6 @@ class Networks:
 # --- OPTIMIZE -----------------------------------------------------
 # --- OPTIMIZE -----------------------------------------------------
 
-# --- SETUP ACADO
-from specpath import acadoBinDir, acadoTxtPath
-from acado_connect import AcadoConnect
-
-acado = AcadoConnect(acadoBinDir + "connect_quadcopter",
-                     datadir=acadoTxtPath)
-acado.NQ = NQ
-acado.NV = NV
-
-acado.options['maxAngle'] = np.pi / 2
-acado.options['printlevel'] = 1
-if 'shift' in acado.options: del acado.options['shift']
-if env is not None:
-    acado.options['umax'] = "%.2f %.2f %.2f %.2f" % tuple([x for x in env.umax])
-
-# if 'icontrol' in acado.options: del acado.options['icontrol']
-acado.debug(False)
-acado.iter = 80
-acado.options['steps'] = 20
-acado.options['acadoKKT'] = 0.0001
-acado.options['icontrol'] = acadoTxtPath + 'guess.clt'
-
 
 # --- ROLL OUT
 
@@ -268,7 +247,12 @@ def trial(i0=None, i1=None):
     Xo, Uo, To = optNet(x0, x1, withPlot=True, color='r')
 
 
+# --- IREPA ALGORTHM ---------------------------------------------------
+# --- IREPA ALGORTHM ---------------------------------------------------
+# --- IREPA ALGORTHM ---------------------------------------------------
+
 def checkPrm(EPS=.05, verbose=True):
+    '''Return a patch that improve the PRM edge cost.'''
     res = []
     for i0, x0 in enumerate(graph.x):
         for i1 in graph.children[i0]:
@@ -285,6 +269,7 @@ def checkPrm(EPS=.05, verbose=True):
 
 
 def plotPrmUpdate(newTrajs, NSAMPLE=10):
+    '''Plot the PRM patch computed by checkPRM'''
     for i0, i1, Xa, Ua, Ta in random.sample(newTrajs, NSAMPLE):
         x0 = graph.x[i0]
         x1 = graph.x[i1]
@@ -296,6 +281,10 @@ def plotPrmUpdate(newTrajs, NSAMPLE=10):
 
 
 def updatePrm(newTrajs):
+    '''
+    Apply the PRM patch computed by checkPRM by replacing the edges with the
+    new traj and cost.
+    '''
     for i0, i1, Xa, Ua, Ta in newTrajs:
         graph.states[i0, i1] = Xa
         graph.controls[i0, i1] = Ua
@@ -303,82 +292,59 @@ def updatePrm(newTrajs):
         graph.edgeTime[i0, i1] = Ta
 
 
-dataset = Dataset()
-dataset.set()
 
-nets = Networks()
-plt.figure(1)
-nets.train(dataset, track=True, verbose=True)
-nets.save()
+# --- ALGO
+# --- ALGO
+# --- ALGO
 
-graph = dataset.prm.graph
+# --- HYPER PARAMS
+INIT_PRM        = True
+IREPA_ITER      = 0
+
+# --- SETUP ACADO
+# if 'icontrol' in acado.options: del acado.options['icontrol']
+acado.debug(False)
 acado.iter = 80
+config(acado,'connect')
+
+graph   = GraphQuadcopter()
+prm     = PRM(graph,
+              sampler = env.reset,
+              checker = lambda x:True,
+              nearestNeighbor = NearestNeighbor(DistanceSO3([1,.1])),
+              connect = ConnectAcado(acado))
+prm     = OptimalPRM.makeFromPRM(prm,acado=acado,stateDiff=QuadcopterStateDiff())
+dataset = Dataset(prm.graph)
+nets    = Networks()
 
 updated = {(i0, i1): False for (i0, i1) in graph.states.keys()}
 
-for iloop in range(6):
+# --- INIT PRM ---
+if INIT_PRM:
+    print 'Init PRM Sample'
+    prm(30,10,10,True)
+    print 'Connexify'
+    prm.connexifyPrm(NTRIAL=100,VERBOSE=True)
+    print 'Densify'
+    config(acado,'traj')
+    prm.densifyPrm(100,VERBOSE=2)
+    prm.graph.save(dataRootPath+'/prm30-100-100')
+else:
+    prm.graph.save(dataRootPath+'/prm30-100-100')
+
+# --- IREPA LOOP
+for iloop in range(IREPA_ITER):
     nets.save('up%02d'%iloop)
-    graph.save(dataRootPath+'/up%02d'%iloop)
+    prm.graph.save(dataRootPath+'/up%02d'%iloop)
 
     trajs = checkPrm()
-    for i0,i1,_,_,_ in trajs:        updated[i0,i1] = True
-
-    #plt.figure(2)
     #plotPrmUpdate(trajs)
     updatePrm(trajs)
 
-    #plt.figure(1)
     dataset.set()
     nets.train(dataset,nepisodes=int(5e3),track=True,verbose=True)
 
 iloop += 1
 nets.save('up%02d'%iloop)
 graph.save(dataRootPath+'/up%02d'%iloop)
-
-
-graphs = {}
-for iloop in range(7):
-    graphs[iloop] = Graph()
-    graphs[iloop].load(dataRootPath + '/up%02d' % iloop)
-Ts = np.matrix([[graphs[i].edgeTime[k] for i in graphs.keys()] for k in graphs[0].edgeTime.keys() if updated[k]]).T
-
-
-def plotEvolution(i0=None, i1=None):
-    if i0 is None or i1 is None:
-        i0, i1 = random.sample([k for k, v in upd.items() if v], 1)[0]
-        print 'Check %d to %d' % (i0, i1)
-    x0, x1 = graph.x[i0], graph.x[i1]
-    for iloop in range(7):
-        nets.load('up%02d' % iloop)
-        # optNet(x0,x1,withPlot=True)
-        Xn, _, Tn = trajFromTraj(x0, x1)
-        try:
-            Xa, _, Ta = optNet(x0, x1)
-        except:
-            Xa = np.zeros([0, 2]); Ta = np.inf
-        Xp = graphs[iloop].states[i0, i1]
-        Tp = graphs[iloop].edgeTime[i0, i1]
-        print '%d: net=%.2f, ac=%.2f prm=%.2f' % (iloop, Tn, Ta, Tp)
-
-        c = 1 - (iloop / 7. + .05)
-        plotargs = {'c': '%.2f' % c,
-                    'linewidth': c * 4 + .5}
-        plt.subplot(2, 2, 0)
-        plt.plot(Xn[:, 0], Xn[:, 1], **plotargs)
-        plt.title('Net')
-        plt.subplot(2, 2, 1)
-        plt.plot(Xa[:, 0], Xa[:, 1], **plotargs)
-        plt.title('Acado')
-        plt.subplot(2, 2, 2)
-        plt.plot(Xp[:, 0], Xp[:, 1], **plotargs)
-        plt.title('PRM')
-        plt.draw()
-
-
-dec = sorted({k: graphs[6].edgeCost[k] - graphs[0].edgeCost[k] for k in graphs[0].states.keys()}.items(),
-             key=lambda x, y: y)
-for (i0, i1), d in dec[:10]:
-    plt.clf()
-    plotEvolution(i0, i1)
-    raw_input('See next ?')
 

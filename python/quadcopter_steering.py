@@ -71,6 +71,7 @@ def config(acado, label, env=None):
         acado.iter = 80
         acado.options['steps'] = 20
         acado.options['icontrol'] = acadoTxtPath + 'guess.clt'
+        acado.options['acadoKKT'] = 0.0001
 
     elif label == "policy":
         if 'horizon' in acado.options: del acado.options['horizon']
@@ -79,6 +80,7 @@ def config(acado, label, env=None):
         acado.iter = 80
         acado.options['steps'] = 20
         acado.options['icontrol'] = acadoTxtPath + 'guess.clt'
+        acado.options['acadoKKT'] = 0.0001
 
     elif label == "refine":
         if 'horizon' in acado.options: del acado.options['horizon']
@@ -87,7 +89,7 @@ def config(acado, label, env=None):
         acado.iter = 80
         acado.options['steps'] = 20
         acado.options['icontrol'] = acadoTxtPath + 'guess.clt'
-
+        acado.options['acadoKKT'] = 0.0001
 
 class ConnectAcado(ConnectAbstract):
     def __init__(self, acado):
@@ -125,7 +127,9 @@ class QuadcopterStateDiff:
 
 # ---
 
-env = Quadcopter(withDisplay=True)
+env = Quadcopter(withDisplay=False)
 acado = AcadoConnect(acadoBinDir + "connect_quadcopter",
                      datadir=acadoTxtPath)
 config(acado, 'connect', env)
+acado.setDims(env.nq,env.nv)
+

@@ -73,11 +73,19 @@ if LOAD_PRM:
 
 if 1 in EXTEND_PRM:
      print '### Initial sampling of PRM',time.ctime()
+<<<<<<< HEAD
      for i in range(2):
           prm(10,10,10,True)
           print 'Sleeping 1s ... it is time for a little CTRL-C ',time.ctime()
           time.sleep(1)
      #graph.save(dataRootPath+'_100pts')
+=======
+     for i in range(10):
+          prm(5, 50, 50,True)
+          # print 'Sleeping 1s ... it is time for a little CTRL-C ',time.ctime()
+          # time.sleep(1)
+          graph.save(dataRootPath+'_50x50')
+>>>>>>> 52853c8... Save generated data after each 5 new nodes.
 
 assert(checkPRM(prm.graph,True)==0)
 
