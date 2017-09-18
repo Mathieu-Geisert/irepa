@@ -34,7 +34,7 @@ struct OptionsOCP
       ("istate,j",   po::value<std::string>(),                                    "Input states (guess)")
       ("horizon,T",  po::value<double     >()->default_value(1.0),                "Horizon length")
       ("Tmin",       po::value<double     >()->default_value(0.1),                "Horizon length minimal")
-      ("Tmax",       po::value<double     >()->default_value(5.0),                "Horizon length maximal")
+      ("Tmax",       po::value<double     >(),                                    "Horizon length maximal")
       ("friction",   po::value<std::vector<double> >()->multitoken()
        ->default_value(std::vector<double>{0.,0.}, "0. 0."),                      "Friction coeff")
       ("decay,a",    po::value<double     >()->default_value(1.0),                "Cost decay rate")
@@ -71,12 +71,16 @@ struct OptionsOCP
 
   const double & T()        { return vm["horizon"   ].as<double>(); }
   const double & Tmin()     { return vm["Tmin"      ].as<double>(); }
-  const double & Tmax()     { return vm["Tmax"      ].as<double>(); }
   const double & decay()    { return vm["decay"     ].as<double>(); }
   const int & steps()       { return vm["steps"     ].as<int>   (); }
   const int & iter()        { return vm["iter"      ].as<int>   (); }
   const int & shift()       { return vm["shift"     ].as<int>   (); }
   const int & printLevel()  { return vm["printlevel"].as<int>   (); }
+  const double & Tmax()
+  { 
+    if(vm.count("Tmax")>0)  return vm["Tmax"      ].as<double>(); 
+    else                    return vm["horizon"   ].as<double>()*5; 
+  }
 
   const bool   withPlot()   { return vm.count("plot")!=0; }
   const double & armature() { return vm["armature"].as<double>(); }
