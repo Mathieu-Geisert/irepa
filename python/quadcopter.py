@@ -4,7 +4,7 @@ from pendulum import Visual
 
 
 class Quadcopter:
-    def __init__(self, mass=2.5, length=.5, guess=1, withDisplay=False):
+    def __init__(self, mass=2.5, length=.5, guess=1, sphObs=False, withDisplay=False):
 
         self.mass = mass
         self.length = length
@@ -44,6 +44,10 @@ class Quadcopter:
 
         self.visuals = []
         self.initDisplay(withDisplay)
+
+        self.sphericalObstacle = sphObs
+        self.obstacleSize = 3.
+        self.obstaclePosition = np.matrix([3., 3., 0.]).T
 
     @property
     def xup(self): return  np.vstack([self.qup, self.vup])
@@ -90,7 +94,13 @@ class Quadcopter:
 
     def sample(self):
         # return np.diagflat(self.xup-self.xlow)*rand(self.nx)+self.xlow
-        q = np.diagflat(self.qup - self.qlow) * rand(self.nq) + self.qlow
+        while True:
+            q = np.diagflat(self.qup - self.qlow) * rand(self.nq) + self.qlow
+            if self.sphericalObstacle == False or self.obstacleSize ** 2 \
+                    <= (q[0] - self.obstaclePosition[0]) ** 2 \
+                            + (q[1] - self.obstaclePosition[1]) ** 2 \
+                            + (q[2] - self.obstaclePosition[2]) ** 2:
+                break
 
         r = lambda a, b: np.random.normal((a + b) / 2., (b - a) / 6.)
         vs = []
@@ -167,8 +177,18 @@ class Quadcopter:
 
             T = np.arange(self.NDT+1)/float(self.NDT)
             return X, U, T
+        elif self.guess ==2:
+            #Static initial guess
+            Ustat = self.mass * self.g / 4.
+            U = np.ones([4, self.NDT]) * Ustat
+            X = np.ones([self.nx, self.NDT])
+            for i in range(self.NDT):
+                X[0:3, i] = x0[0:3].T
+
+            T = np.arange(self.NDT+1)/float(self.NDT)
+            return X, U, T
         else:
-            assert False, "No other initial guess implemented than 1"
+            assert False, "No other initial guess implemented than 1=Quasistatic, 2=Static."
 
 if __name__ == '__main__':
     env = Quadcopter(withDisplay=True)
