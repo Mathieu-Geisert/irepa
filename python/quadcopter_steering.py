@@ -126,9 +126,27 @@ class QuadcopterStateDiff:
 
 
 # ---
+class AcadoQuadConnect(AcadoConnect):
+    def __init__(self,*args,**kwargs):
+        AcadoConnect.__init__(self,*args,**kwargs)
+    def states(self,jobid=None):
+        X = AcadoConnect.states(self,jobid)
+        return X[:,[0,1,2,3,4,6,7,8,9,10]]
+    def buildInitGuess(self,x0,x1,jobid=None):
+        X,U,T = self.guess(x0,x1,self.options)
+        if 'istate' in self.options:
+            X13 = zero(X.shape[0],self.NQ+self.NV+3)
+            X13[:,:self.NQ] = X[:,:self.NQ]
+            X13[:,self.NQ+1:self.NQ+1+self.NV] = X[:,self.NQ:self.NQ+self.NV]
+            np.savetxt(self.stateFile('i',jobid),np.vstack([T/T[-1], X.T]).T)
+        if U is not None and 'icontrol' in self.options:
+            np.savetxt(self.controlFile('i',jobid),np.vstack([T/T[-1], U.T]).T)
+        return X,U,T
+
+
 
 env = Quadcopter(withDisplay=False)
-acado = AcadoConnect(acadoBinDir + "connect_quadcopter",
+acado = AcadoQuadConnect(acadoBinDir + "connect_quadcopter",
                      datadir=acadoTxtPath)
 config(acado, 'connect', env)
 acado.setDims(env.nq,env.nv)

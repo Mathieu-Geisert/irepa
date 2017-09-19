@@ -238,7 +238,8 @@ int main(int argc, const char ** argv )
 
   setupPlots(algorithm,opts,plotExpr,plotNames);
 
-  initControlAndStateQuadcopter(algorithm,opts);
+  //initControlAndStateQuadcopter(algorithm,opts);
+  initControlAndState(algorithm,opts);
 
   //Full static inital guess
 //  Grid timeGrid(0.0,1.,opts.steps()+1);
@@ -262,8 +263,8 @@ int main(int argc, const char ** argv )
 
   returnValue retval = algorithm.solve();
 
-//  outputControlAndState(algorithm,opts);
-  outputControlAndStateWithoutLagrangeTerm(algorithm,opts);
+  outputControlAndState(algorithm,opts);
+  //outputControlAndStateWithoutLagrangeTerm(algorithm,opts);
   outputParameters(algorithm,opts);
 
   //  --- RETURN --------------------------
@@ -271,3 +272,6 @@ int main(int argc, const char ** argv )
   return (int)retval;
 }
 
+/*
+/home/nmansard/src/pinocchio/pycado/build/unittest/connect_quadcopter --Tmax=20.0  --umax=12.50 12.50 12.50 12.50 --ocontrol=/media/ramdisk/acado/process_7051/mpc.ctl --ostate=/media/ramdisk/acado/process_7051/mpc.stx --plot --Tmin=0.001  --maxAngle=1.57079632679 --acadoKKT=0.0001  --steps=20 --horizon=8.3508798106e-01 --printlevel=2 --oparam=/media/ramdisk/acado/process_7051/mpc.prm --initpos=0.1 0 0 0 0  --initvel=0 0 0 0 0  --finalpos=0 0 0 0 0  --finalvel=0 0 0 0 0  --iter=2000 --istate=/media/ramdisk/acado/process_7051/copy.stx --icontrol=/media/ramdisk/acado/process_7051/copy.ctl
+*/

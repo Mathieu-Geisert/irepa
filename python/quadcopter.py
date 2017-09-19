@@ -23,12 +23,19 @@ class Quadcopter:
 
         self.g = 9.81
 
-        self.qup = np.matrix([10., 10., 10., 1.4, 1.4]).T
+        # These bounds are used for sampling new configurations.
+        self.qup = np.matrix([2., 2., 2., np.pi/2, np.pi/2]).T
         self.qlow = -self.qup
-        self.vup = np.matrix([10., 10., 10., 2., 2.]).T
+        self.vup = np.matrix([2., 2., 2., 2., 2.]).T
         self.vlow = -self.vup
-        self.xup = np.vstack([self.qup, self.vup])
-        self.xlow = np.vstack([self.qlow, self.vlow])
+        # self.xup = np.vstack([self.qup, self.vup])
+        # self.xlow = np.vstack([self.qlow, self.vlow])
+
+        # These bounds are used for learning.
+        self.qmax = np.matrix([5., 5., 5., np.pi/2, np.pi/2]).T
+        self.vmax = np.matrix([5]*5).T
+        self.xmax = np.concatenate([self.qmax,self.vmax])
+        self.xmin = -self.xmax
 
         self.umax = np.matrix([mass * 5] * 4).T
         self.umin = zero(4)
@@ -37,6 +44,11 @@ class Quadcopter:
 
         self.visuals = []
         self.initDisplay(withDisplay)
+
+    @property
+    def xup(self): return  np.vstack([self.qup, self.vup])
+    @property
+    def xlow(self): return  np.vstack([self.qlow, self.vlow])
 
     @property
     def nobs(self):

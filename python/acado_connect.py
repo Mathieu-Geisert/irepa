@@ -120,7 +120,8 @@ class AcadoConnect(AcadoRunner):
           # while horizon T is optimized, timescale should be rescaled between 0 and 1 
           # see http://acado.sourceforge.net/doc/html/d4/d29/example_002.html
 
-          np.savetxt(self.stateFile('i',jobid),np.vstack([T/T[-1], X.T]).T)
+          if 'istate' in self.options:
+               np.savetxt(self.stateFile('i',jobid),np.vstack([T/T[-1], X.T]).T)
           if U is not None and 'icontrol' in self.options:
                np.savetxt(self.controlFile('i',jobid),np.vstack([T/T[-1], U.T]).T)
 
@@ -134,13 +135,19 @@ class AcadoConnect(AcadoRunner):
                   'final': [ x1[:self.NQ].flat,x1[self.NQ:].flat ] }
 
      def run(self,x0,x1,autoInit=True,threshold=1e-3,**kwargs):
-          if autoInit:               self.buildInitGuess(x0,x1)
+          if autoInit:               
+               _,_,T = self.buildInitGuess(x0,x1)
+               if 'horizon' not in self.options:
+                    if 'additionalOptions' not in kwargs: kwargs['additionalOptions'] = ''
+                    kwargs['additionalOptions'] +=  ' --horizon=%.4f' % T[-1]
           AcadoRunner.run(self,states=self.stateDict(x0,x1), **kwargs)
           # # Run may raise an error but always return True.
           return self.checkResult(True,x0,x1,threshold=threshold)
 
      def checkResult(self,ret,x0=None,x1=None,jobid=None,threshold=1e-3):
           if not ret: return False
+          if 'Tmin' in self.options and self.opttime(jobid)<self.options['Tmin']:  return False
+          if self.opttime(jobid)<0:  return False
           if x0 is not None or x1 is not None: X = self.states(jobid)
           if x0 is not None and norm(x0.T-X[ 0,:]) > threshold: return False
           if x1 is not None and norm(x1.T-X[-1,:]) > threshold: return False
