@@ -63,7 +63,7 @@ class OptimalPRM(PRM):
           prev  = cur
 
      states  .append( xprev.T )
-     controls.append( zero(2).T )
+     controls.append( controls[-1][-1,:]*0 )
      times   .append( time )
 
      return self.PathFromResults(states=np.vstack(states),controls=np.vstack(controls),
