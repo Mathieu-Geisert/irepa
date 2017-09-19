@@ -24,7 +24,6 @@ NX = 10
 NQ = 5
 NV = 5
 NU = 4
-UBOUND = [env.umin[0], env.umax[0]]
 
 # --- DATA ---------------------------------------------------------
 # --- DATA ---------------------------------------------------------
@@ -53,12 +52,12 @@ class Dataset:
     def set(self):
         graph = self.graph
 
-        x0s = []  # init points
-        x1s = []  # term points
-        vs = []  # values
-        us = []  # controls
-        trajxs = []  # trajs state
-        trajus = []  # trajs state
+        x0s      = []        # init points
+        x1s      = []        # term points
+        vs       = []        # values
+        us       = []        # controls
+        trajxs   = []        # trajs state
+        trajus   = []        # trajs state
         self.indexes = []
 
         for (p0, p1), trajx in graph.states.items():
@@ -97,9 +96,10 @@ class Networks:
 
     def __init__(self):
         TRAJLENGTH = 20
-        bx = [10., 10., 10., 1.4, 1.4, 10., 10., 10., 2., 2.]
-        bx = bx * TRAJLENGTH
-        bx = [[-x for x in bx], bx]
+        # bx = [10., 10., 10., 1.4, 1.4, 10., 10., 10., 2., 2.]
+        # bx = bx * TRAJLENGTH
+        # bx = [[-x for x in bx], bx]
+        bx = np.vstack([ np.hstack([env.xmin,env.xmax]) ]*TRAJLENGTH).T
 
         self.value = PolicyNetwork(NX * 2, 1).setupOptim('direct')
         self.ptrajx = PolicyNetwork(NX * 2, NX * TRAJLENGTH, umax=bx).setupOptim('direct')
@@ -119,12 +119,12 @@ class Networks:
 
         if track:
             hist = []
-            refbatch = random.sample(range(len(dataset.us)), self.BATCH_SIZE * 16)
-            xref = np.hstack([dataset.x0s[refbatch, :],
-                              dataset.x1s[refbatch, :]])
-            vref = dataset.vs[refbatch, :]
-            xsref = dataset.trajxs[refbatch, :]
-            usref = dataset.trajus[refbatch, :]
+            refbatch = random.sample(range(len(dataset.us)),self.BATCH_SIZE*16)
+            xref     = np.hstack([dataset.x0s    [refbatch,:],
+                              dataset.x1s    [refbatch,:]])
+            vref     = dataset.vs     [refbatch,:]
+            xsref    = dataset.trajxs [refbatch,:]
+            usref    = dataset.trajus [refbatch,:]
 
         for episode in range(nepisodes):
             if verbose and not episode % 100:
@@ -154,6 +154,7 @@ class Networks:
                         plt.plot(len(hist), hi, ci)
                     plt.draw()
 
+        if track: return hist
 
 # --- OPTIMIZE -----------------------------------------------------
 # --- OPTIMIZE -----------------------------------------------------
@@ -203,15 +204,18 @@ def optNet(x0=None, x1=None, net=trajFromTraj, withPlot=False, color='r', **plot
 
 # --- PLAY WITH DATA ---------------------------------------------------
 
-def plotGrid(theta):
+def plotGrid(nets, theta=0, idxs = { 0: [-1,1], 1: [-1,1]}, x0 = None,step=1e-2):
     from grid_policy import GridPolicy
     grid = GridPolicy()
-    X0 = grid.setGrid([-1., -1., theta, 0, 0, 0], [+1, +1, theta + 1e-3, 1e-3, 1e-3, 1e-3], 1e-2)
-    V = sess.run(value.policy, feed_dict={value.x: np.hstack([X0, 0 * X0])})
-    plt.scatter(X0[:, 0].flat, X0[:, 1].flat, c=V.flat, linewidths=0, vmin=0, vmax=2)
-    X0 = grid.setGrid([-1., -1., theta, 0, 0, 0], [+1, +1, theta + 1e-3, 1e-3, 1e-3, 1e-3], 8e-2)
-    for x in sess.run(trajx.policy, feed_dict={trajx.x: np.hstack([X0, 0 * X0])}):
-        X = np.reshape(x, [20, 6])
+    x0 = x0 if x0 is not None else zero(env.nx)
+    xm = x0.copy(); xM = x0.copy()+step/10
+    for i,[vm,vM] in idxs.items(): xm[i]=vm; xM[i]= vM
+    X0 = grid.setGrid(xm,xM, 1e-2)
+    V = nets.sess.run(nets.value.policy, feed_dict={nets.value.x: np.hstack([X0, 0 * X0])})
+    plt.scatter(X0[:, 0].flat, X0[:, 1].flat, c=V.flat, linewidths=0)
+    X0 = grid.setGrid(xm,xM,step*8)
+    for x in nets.sess.run(nets.ptrajx.policy, feed_dict={nets.ptrajx.x: np.hstack([X0, 0 * X0])}):
+        X = np.reshape(x, [20, env.nx])
         plt.plot(X[:, 0], X[:, 1])
 
 
@@ -292,17 +296,61 @@ def updatePrm(newTrajs):
         graph.edgeTime[i0, i1] = Ta
 
 
+def expandPRM(prm,NSAMPLE=100,verbose=False):
+    graph   = prm.graph
+    connect = prm.connect
+    for i in range(NSAMPLE):
+        i0,i1 = random.sample(range(len(graph.x)),2)
+        x0,x1 = graph.x[i0],graph.x[i1]
+        if i1 in graph.children[i0]: continue
+        if verbose: print '#%d: Connecting %d to %d' % (i,i0,i1)
+        if connect(x0,x1): 
+            graph.addEdge(i0,i1,+1,**connect.results()._asdict())
+            if verbose: print '\t\t... Yes!'
+
+# --- STEERING METHOD USING PRM -------------------------------------------------
+def value(x0,x1):
+    '''Distance function between 2 elements using the value neural-net approximation.'''
+    return nets.sess.run( nets.value.policy, 
+                          feed_dict={ nets.value.x: np.hstack([ x0.T, x1.T]) })[0,0]
+
+def nndist(x0,x1s):
+    '''
+    Distance function using the Value neural net. x0 is a single point while
+    x1s is a collection of points organized by rows.
+    '''
+    assert(len(x0)==env.nx and x1s.shape[1]==env.nx)
+    n = x1s.shape[0]
+    return nets.sess.run( nets.value.policy, 
+                          feed_dict={ nets.value.x: np.hstack([ np.vstack([x0.T]*n), x1s]) })[:,0]
+
+def nnnear(x0,x1s,nneighbor=1,hdistance=None,fullSort=False):
+    '''Nearest neighbor using the neural-net distance function. x0 is a single point
+    while x1s is a list of points. hdistance is not used.'''
+    d = nndist(x0,np.hstack(x1s).T)
+    if fullSort:        return np.argsort(d)[:nneighbor]
+    else:               return np.argpartition(d,nneighbor)[:nneighbor]
+
+def nnguess(x0,x1,*dummyargs):
+    '''Initial guess for acado using NNet.'''
+    X,U,T = trajFromTraj(x0,x1)
+    N = X.shape[0]
+    return X,U,np.arange(0.,N)*T/(N-1)
 
 # --- ALGO
 # --- ALGO
 # --- ALGO
 
 # --- HYPER PARAMS
-INIT_PRM        = True
-IREPA_ITER      = 0
+INIT_PRM        = False
+IREPA_ITER      = 13
+IREPA_START     = 13  # Start from load
+
 
 # --- SETUP ACADO
 # if 'icontrol' in acado.options: del acado.options['icontrol']
+# if 'istate' in acado.options: del acado.options['istate']
+
 acado.debug(False)
 acado.iter = 80
 config(acado,'connect')
@@ -317,34 +365,86 @@ prm     = OptimalPRM.makeFromPRM(prm,acado=acado,stateDiff=QuadcopterStateDiff()
 dataset = Dataset(prm.graph)
 nets    = Networks()
 
-updated = {(i0, i1): False for (i0, i1) in graph.states.keys()}
+x0 = np.array([[ 1.87598316, -5.92805049,  4.26279685, -1.25035643, -0.20004986,
+                 1.19013475,  1.39587584,  0.16805252, -0.60579329, -0.3715904 ]]).T
+x1 = np.array([[-4.52291563,  5.74256997, -7.35377194,  0.89683177,  1.32842794,
+         2.47440618, -1.18780206, -2.30498153,  0.69375626, -0.11465415]]).T
 
+
+
+# --- INIT PRM ---
+# --- INIT PRM ---
 # --- INIT PRM ---
 if INIT_PRM:
     print 'Init PRM Sample'
-    prm(30,10,10,True)
+    prm(10,10,10,True)
     print 'Connexify'
-    prm.connexifyPrm(NTRIAL=100,VERBOSE=True)
+    #prm.connexifyPrm(NTRIAL=100,VERBOSE=True)
     print 'Densify'
     config(acado,'traj')
-    prm.densifyPrm(100,VERBOSE=2)
+    #prm.densifyPrm(100,VERBOSE=2)
     prm.graph.save(dataRootPath+'/prm30-100-100')
 else:
-    prm.graph.save(dataRootPath+'/prm30-100-100')
+    prm.graph.load(dataRootPath+'/prm30-100-100')
+
+'''
+config(acado,'traj')
+acado.iter = 20
+acado.guess = nnguess
+prm.nearestNeighbors = nnnear
 
 # --- IREPA LOOP
-for iloop in range(IREPA_ITER):
-    nets.save('up%02d'%iloop)
-    prm.graph.save(dataRootPath+'/up%02d'%iloop)
+# --- IREPA LOOP
+# --- IREPA LOOP
+hists = {}
+timings = {}
+if IREPA_START>0:
+    nets        .load('up%02d'%IREPA_START)
+    prm.graph   .load(dataRootPath+'/up%02d'%IREPA_START)
+    hists =   np.load(dataRootPath+'/hist.npy',hists)
+
+for iloop in range(IREPA_START,IREPA_ITER):
+    print (('--- IREPA %d ---'%iloop)+'---'*10+'\n')*3,time.ctime()
+    timings[iloop] = time.ctime()
+    nets        .save('up%02d'%iloop)
+    prm.graph   .save(dataRootPath+'/up%02d'%iloop)
+    np          .save(dataRootPath+'/hist.npy',hists)
+
+    dataset.set()
+    hists[iloop] = nets.train(dataset,nepisodes=int(5e3),track=True,verbose=True)
 
     trajs = checkPrm()
     #plotPrmUpdate(trajs)
     updatePrm(trajs)
 
-    dataset.set()
-    nets.train(dataset,nepisodes=int(5e3),track=True,verbose=True)
+    expandPRM(prm,500,verbose=True)
 
-iloop += 1
-nets.save('up%02d'%iloop)
-graph.save(dataRootPath+'/up%02d'%iloop)
+try:
+    iloop += 1
+    nets.save('up%02d'%iloop)
+    graph.save(dataRootPath+'/up%02d'%iloop)
+except:    pass
 
+# --- RELOAD
+# --- RELOAD
+# --- RELOAD
+
+graphs = {}
+for iloop in range(IREPA_ITER+1):
+    graphs[iloop] = GraphQuadcopter()
+    graphs[iloop].load(dataRootPath+'/up%02d'%iloop)
+
+nets.load('up%02d'%IREPA_ITER)
+graph=graphs[IREPA_ITER]
+#hists=np.load(dataRootPath+'/hist.npy').reshape(1)[0]
+
+dataset.graph=graph
+#dataset.set()
+#h = nets.train(dataset,nepisodes=int(5e3),track=True,verbose=True)
+
+
+#prm.graph  = graph   = GraphQuadcopter()
+#prm(10,10,10,True)
+#prm.connexifyPrm(NTRIAL=100,VERBOSE=True)
+#prm.densifyPrm(100,VERBOSE=2)
+'''

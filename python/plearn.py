@@ -98,13 +98,13 @@ class Networks:
 
     def __init__(self):
         TRAJLENGTH = 20
-        bx     = [ 5.,5.,np.pi/2, 10.,10.,10. ]
+        bx     = list(env.xup.flat)
         bx     = bx*TRAJLENGTH
         bx     = [ [ -x for x in bx ], bx ]
  
-        self.value  = PolicyNetwork(NX*2,1)                           .setupOptim('direct')
-        self.ptrajx = PolicyNetwork(NX*2,NX*TRAJLENGTH,umax=bx)       .setupOptim('direct')
-        self.ptraju = PolicyNetwork(NX*2,NU*TRAJLENGTH,umax=[-1,25])  .setupOptim('direct')
+        self.value  = PolicyNetwork(NX*2,1)                                   .setupOptim('direct')
+        self.ptrajx = PolicyNetwork(NX*2,NX*TRAJLENGTH,umax=bx)               .setupOptim('direct')
+        self.ptraju = PolicyNetwork(NX*2,NU*TRAJLENGTH,umax=[0,env.umax[0]])  .setupOptim('direct')
 
         self.sess   = tf.InteractiveSession()
         tf.global_variables_initializer().run()
