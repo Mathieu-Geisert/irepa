@@ -135,7 +135,7 @@ class AcadoQuadConnect(AcadoConnect):
     def buildInitGuess(self,x0,x1,jobid=None):
         X,U,T = self.guess(x0,x1,self.options)
         if 'istate' in self.options:
-            X13 = zero(X.shape[0],self.NQ+self.NV+3)
+            X13 = zero([X.shape[0],self.NQ+self.NV+3])
             X13[:,:self.NQ] = X[:,:self.NQ]
             X13[:,self.NQ+1:self.NQ+1+self.NV] = X[:,self.NQ:self.NQ+self.NV]
             np.savetxt(self.stateFile('i',jobid),np.vstack([T/T[-1], X.T]).T)
