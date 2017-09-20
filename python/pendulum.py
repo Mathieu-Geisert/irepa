@@ -142,11 +142,24 @@ class Pendulum:
     @property
     def nu(self): return self.nv
 
+    def sample(self):
+        q = np.diagflat(self.qup - self.qlow) * rand(self.nq) + self.qlow
+        r = lambda a, b: np.random.normal((a + b) / 2., (b - a) / 6.)
+        vs = []
+        for iv in range(self.nv):
+            while True:
+                v = r(self.vlow.flat[iv], self.vup.flat[iv])
+                if v >= self.vlow.flat[iv] and v <= self.vup.flat[iv]:
+                    vs.append(v)
+                    break
+        return np.concatenate([q, np.matrix(vs).T])
+
     def reset(self,x0=None):
         if x0 is None: 
-            q0 = np.diagflat(self.qup-self.qlow)*rand(self.nq)+self.qlow
-            v0 = np.diagflat(self.vup-self.vlow)*rand(self.nq)+self.vlow
-            x0 = np.vstack([q0,v0])
+            # q0 = np.diagflat(self.qup-self.qlow)*rand(self.nq)+self.qlow
+            # v0 = np.diagflat(self.vup-self.vlow)*rand(self.nq)+self.vlow
+            # x0 = np.vstack([q0,v0])
+            x0 = self.sample()
         assert len(x0)==self.nx
         self.x = x0.copy()
         self.r = 0.0
