@@ -466,3 +466,17 @@ dataset.graph=graph
 #prm.connexifyPrm(NTRIAL=100,VERBOSE=True)
 #prm.densifyPrm(100,VERBOSE=2)
 '''
+
+x0 = zero(env.nx)
+x0[0] = 2.5
+x1 = zero(env.nx)
+acado.run(x0,x1)
+Xpick = acado.states()
+
+
+x0[0] = .4; x0[-2] = .2; x0[-1] = 1.
+acado.run(x0,x1)
+Xdist = acado.states()
+
+plt.plot(Xpick[:,0],Xpick[:,1])
+plt.plot(Xdist[:,0],Xdist[:,1])
