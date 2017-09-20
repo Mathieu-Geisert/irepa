@@ -390,7 +390,9 @@ graph.save(dataRootPath+'/up%02d'%iloop)
 
 # --- PLOTS -----------------------------------------------------------------
 
-if True:
+NG=10
+'''
+if False:
     import plot_utils
     from plot_utils import saveCurrentFigure
     plot_utils.FIGURE_PATH = './figs/'
@@ -400,7 +402,6 @@ else:
 
 #plt.ion()
 
-NG=10
 graphs = {}
 for iloop in range(NG+1):
     graphs[iloop] = Graph()
@@ -411,13 +412,14 @@ hists=np.load(dataRootPath+'/hist.npy').reshape(1)[0]
 prmcounts = np.load(dataRootPath+'/prmdiffusion.npy') 
 ## Number of connections wrt nb steering calls in irepa.
 irepacounts = np.load(dataRootPath+'/irepadiffusion.npy') 
-
-# ---
-# ---
-# ---
-
-Ts = np.matrix([ [ graphs[i].edgeTime[k] for i in range(NG) ] for k in graphs[0].edgeTime.keys() ]).T
 '''
+# ---
+# ---
+# ---
+
+'''
+Ts = np.matrix([ [ graphs[i].edgeTime[k] for i in range(NG) ] for k in graphs[0].edgeTime.keys() ]).T
+
 plt.subplot(2,1,1)
 plt.plot(np.mean(Ts,1),'y+-',markeredgewidth=15)
 plt.ylabel('Mean PRM cost')
@@ -622,7 +624,7 @@ for (i0,i1),d in dec[:10]:
 # ---
 # ---
 # ---
-'''
+
 env.initDisplay()
 
 acado.iter=200
@@ -670,7 +672,7 @@ ballstart    = ballend - xz2xyz(v[3:])
 ballstart[2] += .5
 tend      = p*5
 
-gui.startCapture(0,'./figs/captures/bicopterball','png')
+#gui.startCapture(0,'./figs/captures/bicopterball','png')
 gui.setVisibility('world/ball','OFF')
 for t,x in enumerate(X12):
     if t==tstart:        gui.setVisibility('world/ball','ON')
@@ -680,5 +682,5 @@ for t,x in enumerate(X12):
         gui.applyConfiguration('world/ball', ball.A1.tolist()+[1.,0.,0.,0.])
     env.display(x.T)
     time.sleep(.05)
-gui.stopCapture(0)
-'''
+#gui.stopCapture(0)
+#'''
