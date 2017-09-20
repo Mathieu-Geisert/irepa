@@ -228,11 +228,19 @@ int main(int argc, const char ** argv )
   {
       std::vector<double> obs = opts.sphericalObstacle();
       //Position Constraint
-      ocp.subjectTo( pow(obs[0], 2) <= square(qx-obs[1]) + square(qy-obs[2]) + square(qz-obs[3]) );
+      ocp.subjectTo( 1.*pow(obs[0], 2) <= 1.*(square(qx-obs[1]) + square(qy-obs[2]) + square(qz-obs[3])) );
 
       //Position + speed*half_time_step Constraint
-      ocp.subjectTo( pow(obs[0], 2) <= square(qx+vx*T/opts.steps()-obs[1]) + square(qy+vy*T/opts.steps()-obs[2])
-                                        + square(qz+vz*T/opts.steps()-obs[3]) );
+      ocp.subjectTo( 1.*pow(obs[0], 2) <= 1.*(square(qx+vx*0.5*T/opts.steps()-obs[1]) + square(qy+vy*0.5*T/opts.steps()-obs[2])
+                                        + square(qz+vz*0.5*T/opts.steps()-obs[3])) );
+
+      //Position + speed*half_time_step Constraint
+      ocp.subjectTo( 1.*pow(obs[0], 2) <= 1.*(square(qx+vx*0.25*T/opts.steps()-obs[1]) + square(qy+vy*0.25*T/opts.steps()-obs[2])
+                                        + square(qz+vz*0.25*T/opts.steps()-obs[3])) );
+
+      //Position + speed*half_time_step Constraint
+      ocp.subjectTo( 1.*pow(obs[0], 2) <= 1.*(square(qx+vx*0.75*T/opts.steps()-obs[1]) + square(qy+vy*0.75*T/opts.steps()-obs[2])
+                                        + square(qz+vz*0.75*T/opts.steps()-obs[3])) );
 
   }
 
@@ -249,6 +257,10 @@ int main(int argc, const char ** argv )
 
   //initControlAndStateQuadcopter(algorithm,opts);
   initControlAndState(algorithm,opts);
+
+  LogRecord logdiff(LOG_AT_END , PS_DEFAULT);
+  logdiff << LOG_KKT_TOLERANCE;
+  algorithm << logdiff;
 
   //Full static inital guess
 //  Grid timeGrid(0.0,1.,opts.steps()+1);
