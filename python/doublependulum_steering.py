@@ -157,7 +157,7 @@ class DoublePendulumStateDiff:
 
 
 
-env = Pendulum(2,length=.5,mass=3.0,armature=.2,withDisplay=False)
+env = Pendulum(2,length=.5,mass=3.0,armature=.2,withDisplay=True)
 env.withSinCos      = False             # State is dim-3: (cosq,sinq,qdot) ...
 env.vmax            = 100.
 env.Kf              = np.diagflat([ 0.2, 2. ])

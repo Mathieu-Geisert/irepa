@@ -345,7 +345,7 @@ def nnguess(x0,x1,*dummyargs):
 
 # --- HYPER PARAMS
 INIT_PRM        = False
-IREPA_ITER      = 15
+IREPA_ITER      = 6
 IREPA_START     = 6  # Start from load
 
 
@@ -463,3 +463,22 @@ dataset.graph=graph
 #prm.connexifyPrm(NTRIAL=100,VERBOSE=True)
 #prm.densifyPrm(100,VERBOSE=2)
 '''
+
+
+x = [ zero(4) for i in range(6) ]
+x[0][0] = -np.pi
+x[2][1] = -np.pi
+x[4][0] = np.pi/2
+
+X=[]
+for x0,x1 in zip(x[:-1],x[1:]):
+    acado.run(x0,x1)
+    X.append(acado.states())
+X = np.vstack(X)
+
+for xplay in X:
+    env.display(xplay)
+    time.sleep(.1)
+
+np.save(dataRootPath+'/demotraj.npy',X)
+
