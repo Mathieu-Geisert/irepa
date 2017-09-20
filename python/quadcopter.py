@@ -92,15 +92,16 @@ class Quadcopter:
         else:
             self.viewer = None
 
+    def check(self,x):
+        return self.sphericalObstacle == False \
+            or self.obstacleSize ** 2  <= (  (x[0] - self.obstaclePosition[0]) ** 2 
+                                           + (x[1] - self.obstaclePosition[1]) ** 2
+                                           + (x[2] - self.obstaclePosition[2]) ** 2)
     def sample(self):
         # return np.diagflat(self.xup-self.xlow)*rand(self.nx)+self.xlow
         while True:
             q = np.diagflat(self.qup - self.qlow) * rand(self.nq) + self.qlow
-            if self.sphericalObstacle == False or self.obstacleSize ** 2 \
-                    <= (q[0] - self.obstaclePosition[0]) ** 2 \
-                            + (q[1] - self.obstaclePosition[1]) ** 2 \
-                            + (q[2] - self.obstaclePosition[2]) ** 2:
-                break
+            if self.check(q):  break
 
         r = lambda a, b: np.random.normal((a + b) / 2., (b - a) / 6.)
         vs = []

@@ -22,13 +22,6 @@ random.seed         (RANDOM_SEED)
 # --- ENV ----------------------------------------------------------
 # --- ENV ----------------------------------------------------------
 # --- ENV ----------------------------------------------------------
-from quadcopter import Quadcopter
-
-env = Quadcopter(withDisplay=False)
-NX = 10
-NQ = 5
-NV = 5
-NU = 4
 
 # --- DATA ---------------------------------------------------------
 # --- DATA ---------------------------------------------------------
@@ -99,15 +92,16 @@ from networks import *
 class Networks:
     BATCH_SIZE = 128
 
-    def __init__(self):
+    def __init__(self,NX,NU):
         TRAJLENGTH = 20
         # bx = [10., 10., 10., 1.4, 1.4, 10., 10., 10., 2., 2.]
         # bx = bx * TRAJLENGTH
         # bx = [[-x for x in bx], bx]
         bx = np.vstack([ np.hstack([env.xmin,env.xmax]) ]*TRAJLENGTH).T
+        self.bx = bx
 
         self.value = PolicyNetwork(NX * 2, 1).setupOptim('direct')
-        self.ptrajx = PolicyNetwork(NX * 2, NX * TRAJLENGTH, umax=bx).setupOptim('direct')
+        self.ptrajx = PolicyNetwork(NX * 2, NX * TRAJLENGTH).setupOptim('direct') # TODO : , umax=bx
         self.ptraju = PolicyNetwork(NX * 2, NU * TRAJLENGTH, umax=[-1, 25]).setupOptim('direct')
 
         self.sess = tf.InteractiveSession()
@@ -173,9 +167,9 @@ def trajFromTraj(x0=None, x1=None, withPlot=None, **plotargs):
     x1 = x1.T if x1 is not None else env.sample().T
     x = np.hstack([x0, x1])
     X = nets.sess.run(nets.ptrajx.policy, feed_dict={nets.ptrajx.x: x})
-    X = np.reshape(X, [max(X.shape) / NX, NX])
+    X = np.reshape(X, [max(X.shape) / env.nx, env.nx])
     U = nets.sess.run(nets.ptraju.policy, feed_dict={nets.ptraju.x: x})
-    U = np.reshape(U, [max(U.shape) / NU, NU])
+    U = np.reshape(U, [max(U.shape) / env.nu, env.nu])
     T = nets.sess.run(nets.value.policy, feed_dict={nets.value.x: x})[0, 0]
     if withPlot is not None: plt.plot(X[:, 0], X[:, 1], withPlot, **plotargs)
     return X, U, T
@@ -348,8 +342,8 @@ def nnguess(x0,x1,*dummyargs):
 
 # --- HYPER PARAMS
 INIT_PRM        = False
-IREPA_ITER      = 15
-IREPA_START     = 15  # Start from load
+IREPA_ITER      = 0
+IREPA_START     = 0  # Start from load
 
 
 # --- SETUP ACADO
@@ -369,7 +363,7 @@ prm     = PRM(graph,
               connect = ConnectAcado(acado))
 prm     = OptimalPRM.makeFromPRM(prm,acado=acado,stateDiff=QuadcopterStateDiff())
 dataset = Dataset(prm.graph)
-nets    = Networks()
+nets    = Networks(env.nx,env.nu)
 
 
 # x0 = np.array([[ 1.87598316, -5.92805049,  4.26279685, -1.25035643, -0.20004986,
@@ -388,12 +382,40 @@ def prunePrm(prm,ntrial=-1):
             print '\t\t Remove %d-%d'%(i0,i1), '\t(%.1f vs %.1f)' % (cprm,cstar)
             prm.graph.removeEdge(i0,i1)
 
+def invalidCollisionsEdges(prm):
+    config(acado,'traj')
+    acado.iter = 10
+    for (i0,i1) in prm.graph.states.keys():
+        try:
+            traj = prm.optPathFrom(i0,i1)
+            ttime = traj.times[-1]
+            prm.graph.addEdge(i0,i1,+1,time=ttime,**traj._asdict())
+            print '%d-%d is valid'%(i0,i1)
+        except:
+            print '!! %d-%d is invalid'%(i0,i1)
+            prm.graph.removeEdge(i0,i1)
+
+
+def invalidCollisionsNodes(prm):
+    for i0,x0 in enumerate(prm.graph.x):
+        if not env.check(x0):
+            print 'Node %d is invalid' % i0
+            prm.graph.x[i0] = env.sample()
+            for ic in prm.graph.children[i0]: prm.graph.removeEdge(i0,ic)
+            for ip,_ in enumerate(prm.graph.x): 
+                if i0 in prm.graph.children[ip]: prm.graph.removeEdge(ip,i0)
+
+def invalidCollisions(prm):
+    invalidCollisionsNodes(prm)
+    invalidCollisionsEdges(prm)
+
 # --- INIT PRM ---
 # --- INIT PRM ---
 # --- INIT PRM ---
 #acado.debug()
 if INIT_PRM:
     print 'Init PRM Sample'
+    config(acado,'connect')
     prm(30,10,10,True)
     print 'Connexify'
     prm.connexifyPrm(NTRIAL=200,VERBOSE=True)
@@ -403,7 +425,11 @@ if INIT_PRM:
     #for i0,i1 in [ k for k,X in graph.states.items() if np.any(X>7) or np.any(X<-7) ]: graph.removeEdge(i0,i1)
     prm.graph.save(dataRootPath+'/prm30-200-500')
 else:
-    prm.graph.load(dataRootPath+'/prm30-400-700')
+    pass
+    #prm.graph.load(dataRootPath+'/nocoll')
+
+#if env.sphericalObstacle:    invalidCollisions(prm)
+toto
 
 prunePrm(prm)
 config(acado,'traj')

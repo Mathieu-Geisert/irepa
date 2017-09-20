@@ -54,13 +54,12 @@ def config(acado, label, env=None):
     if 'shift' in acado.options: del acado.options['shift']
     if env is not None:
         acado.options['umax'] = "%.2f %.2f %.2f %.2f" % tuple([x for x in env.umax])
-
-    if env.sphericalObstacle:
-        acado.options['sphericalObstacle'] = "%.2f %.2f %.2f %.2f"\
-                                             % tuple([env.obstacleSize,\
-                                                      env.obstaclePosition[0], \
-                                                      env.obstaclePosition[1], \
-                                                      env.obstaclePosition[2]])
+        if env.sphericalObstacle:
+            acado.options['sphericalObstacle'] = "%.2f %.2f %.2f %.2f"\
+                % tuple([env.obstacleSize,\
+                             env.obstaclePosition[0], \
+                             env.obstaclePosition[1], \
+                             env.obstaclePosition[2]])
     if label == "connect":
         # if 'icontrol' in acado.options: del acado.options['icontrol']
         acado.debug(False)
@@ -157,7 +156,13 @@ class AcadoQuadConnect(AcadoConnect):
     #         return False
 
 
+dataRootPath = 'data/planner/quadcopterobs'
 env = Quadcopter(withDisplay=False)
+
+env.sphericalObstacle = True
+env.obstacleSize = 1.
+env.obstaclePosition = np.matrix([2., 2., 0.]).T
+
 #acado = AcadoQuadConnect(acadoBinDir + "connect_quadcopter",
 acado = AcadoConnect(acadoBinDir + "connect_quadcopter",
                      datadir=acadoTxtPath)

@@ -40,12 +40,19 @@ class PolicyNetwork:
         self.withUmax(umax)
 
     def withUmax(self,umax):
-        if umax is None: return
+        if umax is None: 
+            print 'umax none'
+            return
         umax = np.matrix(umax)
         self.head = self.policy
-        if   umax.shape == (1,1):  self.policy = self.policy*umax[0,0]
-        elif umax.shape == (1,2):  self.policy = (self.policy*(umax[0,1]-umax[0,0]) + umax[0,0] + umax[0,1])/2
-        elif umax.shape == (2,self.NX): 
+        if   umax.shape == (1,1):  
+            print 'umax float'
+            self.policy = self.policy*umax[0,0]
+        elif umax.shape == (1,2): 
+            print 'umax pair'
+            self.policy = (self.policy*(umax[0,1]-umax[0,0]) + umax[0,0] + umax[0,1])/2
+        elif umax.shape == (2,self.NU): 
+            print 'umax list'
             l,u = umax
             self.policy = (tf.multiply(self.policy,u-l) + l+u)/2
 
