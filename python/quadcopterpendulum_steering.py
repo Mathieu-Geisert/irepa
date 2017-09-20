@@ -30,7 +30,7 @@ def config(acado, label, env=None):
     if label == "connect":
         # if 'icontrol' in acado.options: del acado.options['icontrol']
         acado.debug(False)
-        acado.iter = 30
+        acado.iter = 50
         acado.options['steps'] = 20
         acado.options['acadoKKT'] = 0.0001
         acado.options['icontrol'] = acadoTxtPath + 'guess.clt'
@@ -123,7 +123,6 @@ class AcadoQuadConnect(AcadoConnect):
     #         return False
 
 
-dataRootPath = 'data/planner/quadcopterobs'
 env = QuadcopterPendulum(withDisplay=False)
 
 env.sphericalObstacle = True
@@ -141,11 +140,12 @@ acado.setDims(env.nq,env.nv)
 env.qup = np.matrix([1., 1., 1., np.pi/8, np.pi/8, np.pi/10, np.pi/10 ]).T
 env.vup = np.matrix([.2]*5 + [.01]*2).T
 
-env.qlow = -env.qlow
-env.vlow = -env.vup
-
 env.qmax = np.matrix([5., 5., 5., np.pi/2, np.pi/2, np.pi/3, np.pi/3]).T
 env.vmax = np.matrix([5]*7).T
 env.xmax = np.concatenate([env.qmax,env.vmax])
+
+env.qlow = -env.qup
+env.vlow = -env.vup
+env.xmin = -env.xmax
 
 

@@ -58,8 +58,12 @@ class Dataset:
         trajus   = []        # trajs state
         self.indexes = []
 
+        import sys
+        sys.stdout.write('Load dataset ')
+        sys.stdout.flush()
         for (p0, p1), trajx in graph.states.items():
-            print "Load edge", p0, p1
+            sys.stdout.write('.')
+            sys.stdout.flush()
             traju = graph.controls[p0, p1]
             T = graph.edgeTime[p0, p1]
             DT = T / (len(trajx) - 1)
@@ -341,9 +345,9 @@ def nnguess(x0,x1,*dummyargs):
 # --- ALGO
 
 # --- HYPER PARAMS
-INIT_PRM        = True
-IREPA_ITER      = 0
-IREPA_START     = 0  # Start from load
+INIT_PRM        = False
+IREPA_ITER      = 3
+IREPA_START     = 3  # Start from load
 
 
 # --- SETUP ACADO
@@ -365,13 +369,6 @@ prm     = OptimalPRM.makeFromPRM(prm,acado=acado,stateDiff=QuadcopterPendulumSta
 dataset = Dataset(prm.graph)
 nets    = Networks(env.nx,env.nu)
 
-
-# x0 = np.array([[ 1.87598316, -5.92805049,  4.26279685, -1.25035643, -0.20004986,
-#                  1.19013475,  1.39587584,  0.16805252, -0.60579329, -0.3715904 ]]).T
-# x1 = np.array([[-4.52291563,  5.74256997, -7.35377194,  0.89683177,  1.32842794,
-#          2.47440618, -1.18780206, -2.30498153,  0.69375626, -0.11465415]]).T
-
-
 def prunePrm(prm,ntrial=-1):
     from astar import astar
     randqueue = random.sample(prm.graph.states.keys(),ntrial) if ntrial>0 else prm.graph.states.keys()
@@ -386,28 +383,20 @@ def prunePrm(prm,ntrial=-1):
 # --- INIT PRM ---
 # --- INIT PRM ---
 
-# x0 = env.sample()
-# x1 = zero(env.nx)
-# acado.debug()
-# acado.run(x0,x1)
-
 if INIT_PRM:
     print 'Init PRM Sample'
     config(acado,'connect')
     prm(30,10,10,True)
     print 'Connexify'
-    #prm.connexifyPrm(NTRIAL=200,VERBOSE=True)
+    prm.connexifyPrm(NTRIAL=50,VERBOSE=True)
     print 'Densify'
     config(acado,'traj')
-    #prm.densifyPrm(500,VERBOSE=2)
+    prm.densifyPrm(500,VERBOSE=2)
     #for i0,i1 in [ k for k,X in graph.states.items() if np.any(X>7) or np.any(X<-7) ]: graph.removeEdge(i0,i1)
-    #prm.graph.save(dataRootPath+'/prm30-200-500')
+    prm.graph.save(dataRootPath+'/prm30-50-500')
 else:
-    pass
-    #prm.graph.load(dataRootPath+'/nocoll')
+    prm.graph.load(dataRootPath+'/prm30-50-500')
 
-#if env.sphericalObstacle:    invalidCollisions(prm)
-toto
 
 prunePrm(prm)
 config(acado,'traj')
