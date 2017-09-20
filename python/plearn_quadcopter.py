@@ -348,8 +348,8 @@ def nnguess(x0,x1,*dummyargs):
 
 # --- HYPER PARAMS
 INIT_PRM        = False
-IREPA_ITER      = 8
-IREPA_START     = 8  # Start from load
+IREPA_ITER      = 15
+IREPA_START     = 15  # Start from load
 
 
 # --- SETUP ACADO
