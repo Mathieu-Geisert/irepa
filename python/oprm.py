@@ -172,6 +172,6 @@ class OptimalPRM(PRM):
                ttime = traj.times[-1]
                if VERBOSE: 
                  prevtime = self.pathFrom(idx1,idx2).times[-1]
-                 if prevtime < .9*ttime:
+                 if ttime < .9*prevtime:
                    print '\t\tWas %.2f -- Now %.2f' % (prevtime,ttime)
                graph.addEdge(idx1,idx2,+1,time=ttime,**traj._asdict())

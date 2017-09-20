@@ -10,9 +10,9 @@ struct OptionsQuadcopter : public OptionsOCP
   virtual void addExtraOptions()
   {
     desc.add_options()
-      ("maxAngle",       po::value<double>()->default_value(1.7),         "Max angles for roll and pitch");
+      ("maxAngle",       po::value<double>()->default_value(1.5707963267948967),         "Max angles for roll and pitch");
     desc.add_options()
-      ("maxAngleSing",   po::value<double>()->default_value(1.4),         "Max angle for the singular axis i.e pitch");
+      ("maxAngleSing",   po::value<double>()->default_value(1.5707963268),         "Max angle for the singular axis i.e pitch");
   }
 
   const double & maxAngle()        { return vm["maxAngle"].as<double>(); }
@@ -120,21 +120,21 @@ int main(int argc, const char ** argv )
   //                                         q is the rotational speed around the local Y axis,
   //                                         r is the rotational speed around the local Z axis,
 
-  DifferentialState        qx, qy, qz, roll, pitch, yaw, vx, vy, vz, p, q, r;
+  DifferentialState        qx, qy, qz, roll, pitch, vx, vy, vz, p, q;
   Control                  f1,f2,f3,f4;
   Parameter                T;
   DifferentialEquation     f( 0.0, T );   // the differential equation
 
-  IntermediateState dyaw = cos(yaw)*tan(pitch)*p+sin(yaw)*tan(pitch)*q+r;
-  IntermediateState dpitch = sin(yaw)*p+cos(yaw)*q;
-  IntermediateState droll = cos(yaw)/cos(pitch)*p-sin(yaw)/cos(pitch)*q;
+  //IntermediateState dyaw = cos(yaw)*tan(pitch)*p+sin(yaw)*tan(pitch)*q+r;
+  IntermediateState dpitch = q;
+  IntermediateState droll = 1/cos(pitch)*p;
   IntermediateState fTot = f1+f2+f3+f4;
 
   //  --- SETUP OCP -----------------------
   OCP ocp( 0.0, T, opts.steps() );                        // time horizon of the OCP: [0,T]
 
   ocp.minimizeMayerTerm( T );
-  ocp.minimizeLagrangeTerm( 1000*yaw*yaw + 100*dyaw*dyaw );      //WARNING: LagrangeTerm is added as a additionnal state...
+  //ocp.minimizeLagrangeTerm( 1000*yaw*yaw + 100*dyaw*dyaw );      //WARNING: LagrangeTerm is added as a additionnal state...
 
   f << dot(qx) == vx;
   f << dot(qy) == vy;
@@ -142,23 +142,15 @@ int main(int argc, const char ** argv )
   f << dot(vx) == fTot*sin(pitch)/m;                //(f1+f2+f3+f4)*sin(pitch)/m;
   f << dot(vy) == fTot*sin(roll)*cos(pitch)/m;      //(f1+f2+f3+f4)*sin(roll)*cos(pitch)/m;
   f << dot(vz) == fTot*cos(roll)*cos(pitch)/m - g;  //(f1+f2+f3+f4)*cos(roll)*cos(pitch)/m - g;
-  f << dot(yaw) == dyaw;                            //-cos(yaw)*tan(pitch)*p+sin(yaw)*tan(pitch)*q+r;
   f << dot(pitch) == dpitch;                        //sin(yaw)*p+cos(yaw)*q;
   f << dot(roll) == droll;                          //cos(yaw)/cos(pitch)*p-sin(yaw)/cos(pitch)*q;
-  f << dot(p) == (l*(f1-f2)+(Iyy-Izz)*q*r)/Ixx;
-  f << dot(q) == (l*(f4-f3)+(Izz-Ixx)*p*r)/Iyy;
-  f << dot(r) == Ct*(f1+f2-f3-f4)/Izz;
+  f << dot(p) == (l*(f1-f2)+(Iyy-Izz)*q)/Ixx;
+  f << dot(q) == (l*(f4-f3)+(Izz-Ixx)*p)/Iyy;
+  //f << dot(r) == Ct*(f1+f2-f3-f4)/Izz;
 
   ocp.subjectTo( f );
 
   //FIXED CONSTRAINTS:
-  //Start
-  ocp.subjectTo( AT_START,  yaw  ==  0. );
-  ocp.subjectTo( AT_START,  dyaw ==  0. );
-
-  //End
-  ocp.subjectTo( AT_END,  yaw  ==  0. );
-  ocp.subjectTo( AT_END,  dyaw ==  0. );
 
   //Controls
   ocp.subjectTo( 0.  <= f1 <=  umax1   );
@@ -179,6 +171,8 @@ int main(int argc, const char ** argv )
   {
       ocp.subjectTo( -opts.maxAngle()  <= pitch <=  opts.maxAngle()   );
   }
+
+  //Out[64]: '/home/nmansard/src/pinocchio/pycado/build/unittest/connect_quadcopter --icontrol=/media/ramdisk/acado/process_3092/guess.clt --umax=25.00 25.00 25.00 25.00 --ocontrol=/media/ramdisk/acado/process_3092/mpc.ctl --ostate=/media/ramdisk/acado/process_3092/mpc.stx --plot --Tmin=0.001 --iter=80 --maxAngle=1.57079632679 --acadoKKT=0.0001 --istate=/media/ramdisk/acado/process_3092/guess.stx --steps=20 --printlevel=2 --oparam=/media/ramdisk/acado/process_3092/mpc.prm --initpos=1.33210438965793986910 0.13778088163072554906 0.64432925172179356110 0.28525541992832570415 -0.28881288677532768183 --initvel=-0.90930527914862102623 0.49287897362600802120 -0.70437751649159840994 0.11160754548927977192 0.76089588652849715622 --finalpos=0.57736691356793989893 0.37999095584072550835 1.16241229530179346341 0.94238062408832568018 0.56453766202467225988 --finalvel=-1.08922746119862079439 -0.28073074285399196581 0.41088645728840161864 -0.31934786656072022826 0.91267344654849724694 --horizon=1.7155258290'
 
   //Time boundaries
   ocp.subjectTo( opts.Tmin()  <= T  <= opts.Tmax()  );
@@ -233,8 +227,10 @@ int main(int argc, const char ** argv )
 
   OptimizationAlgorithm algorithm(ocp);
 
-  const std::vector<std::string> plotNames = {"X", "Y", "Z", "roll", "pitch", "yaw"};
-  std::vector<ACADO::Expression> plotExpr = {qx, qy, qz, roll, pitch, yaw};
+  // const std::vector<std::string> plotNames = {"X", "Y", "Z", "roll", "pitch"};
+  // std::vector<ACADO::Expression> plotExpr = {qx, qy, qz, roll, pitch};
+  const std::vector<std::string> plotNames = {"X", "Y", "Z", "roll"};
+  std::vector<ACADO::Expression> plotExpr = {qx, qy, qz, roll};
 
   setupPlots(algorithm,opts,plotExpr,plotNames);
 

@@ -168,7 +168,11 @@ class AcadoConnect(AcadoRunner):
      def run_async(self,x0,x1,autoInit=True,jobid=None, **kwargs):
           # We have to pre-book to know where the init-guess should be stored.
           if jobid is None: jobid = self.book_async()
-          if autoInit:               self.buildInitGuess(x0,x1,jobid=jobid)
+          if autoInit:
+               _,_,T = self.buildInitGuess(x0,x1,jobid=jobid)
+               if 'horizon' not in self.options:
+                    if 'additionalOptions' not in kwargs: kwargs['additionalOptions'] = ''
+                    kwargs['additionalOptions'] +=  ' --horizon=%.4f' % T[-1]
           return AcadoRunner.run_async(self,
                                        states = self.stateDict(x0,x1),
                                        jobid  = jobid, **kwargs)

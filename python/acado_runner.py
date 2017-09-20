@@ -119,7 +119,7 @@ class AcadoRunner(object):
     def join(self,jid,timeout=None,dorelease=True):
         '''Join the process (with timeout) and return the result returned by the process.'''
         jh = self.jobReferences[jid]
-        retCode = jh.get(timeout=timeout)
+        retCode = jh.get(timeout=timeout) >> 8
         if dorelease: self.release(jid)
         return self.boolFromReturnCode(retCode)
 

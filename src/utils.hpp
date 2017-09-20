@@ -78,10 +78,10 @@ struct OptionsOCP
   const int & iter()        { return vm["iter"      ].as<int>   (); }
   const int & shift()       { return vm["shift"     ].as<int>   (); }
   const int & printLevel()  { return vm["printlevel"].as<int>   (); }
-  const double & Tmax()
+  const double Tmax()
   { 
     if(vm.count("Tmax")>0)  return vm["Tmax"      ].as<double>(); 
-    else                    return vm["horizon"   ].as<double>()*5; 
+    else                    return vm["horizon"   ].as<double>()*5.0;
   }
 
   const bool   withPlot()   { return vm.count("plot")!=0; }
@@ -229,9 +229,14 @@ void initAlgorithmStandardParameters( ACADO::OptimizationAlgorithm  & algorithm,
   USING_NAMESPACE_ACADO;
   algorithm.set( PRINTLEVEL, opts.printLevel());
   algorithm.set( PRINT_COPYRIGHT, 0);
-  algorithm.set( INTEGRATOR_TYPE,INT_RK45);
+  //algorithm.set( INTEGRATOR_TYPE,INT_RK45);
+  algorithm.set( INTEGRATOR_TYPE      , INT_RK78        );
   algorithm.set( MAX_NUM_ITERATIONS, opts.iter() );
   algorithm.set( KKT_TOLERANCE, opts.acadoKKT());
+
+  algorithm.set( INTEGRATOR_TOLERANCE , 1e-2            );
+  algorithm.set( MAX_NUM_INTEGRATOR_STEPS, 100 );
+  //algorithm.set( DISCRETIZATION_TYPE, SINGLE_SHOOTING  );
 }
 
 void setupPlots( ACADO::OptimizationAlgorithm  & algorithm, OptionsOCP & opts,

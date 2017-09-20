@@ -14,6 +14,11 @@ from quadcopter_steering import env,acado,config,GraphQuadcopter,ConnectAcado,Qu
 
 plt.ion()
 
+RANDOM_SEED = 666 #int((time.time()%10)*1000)
+print "Seed = %d" %  RANDOM_SEED
+np .random.seed     (RANDOM_SEED)
+random.seed         (RANDOM_SEED)
+
 # --- ENV ----------------------------------------------------------
 # --- ENV ----------------------------------------------------------
 # --- ENV ----------------------------------------------------------
@@ -343,8 +348,8 @@ def nnguess(x0,x1,*dummyargs):
 
 # --- HYPER PARAMS
 INIT_PRM        = False
-IREPA_ITER      = 13
-IREPA_START     = 13  # Start from load
+IREPA_ITER      = 8
+IREPA_START     = 8  # Start from load
 
 
 # --- SETUP ACADO
@@ -356,6 +361,7 @@ acado.iter = 80
 config(acado,'connect')
 
 graph   = GraphQuadcopter()
+graph.addNode(zero(env.nx))
 prm     = PRM(graph,
               sampler = env.reset,
               checker = lambda x:True,
@@ -365,33 +371,48 @@ prm     = OptimalPRM.makeFromPRM(prm,acado=acado,stateDiff=QuadcopterStateDiff()
 dataset = Dataset(prm.graph)
 nets    = Networks()
 
-x0 = np.array([[ 1.87598316, -5.92805049,  4.26279685, -1.25035643, -0.20004986,
-                 1.19013475,  1.39587584,  0.16805252, -0.60579329, -0.3715904 ]]).T
-x1 = np.array([[-4.52291563,  5.74256997, -7.35377194,  0.89683177,  1.32842794,
-         2.47440618, -1.18780206, -2.30498153,  0.69375626, -0.11465415]]).T
+
+# x0 = np.array([[ 1.87598316, -5.92805049,  4.26279685, -1.25035643, -0.20004986,
+#                  1.19013475,  1.39587584,  0.16805252, -0.60579329, -0.3715904 ]]).T
+# x1 = np.array([[-4.52291563,  5.74256997, -7.35377194,  0.89683177,  1.32842794,
+#          2.47440618, -1.18780206, -2.30498153,  0.69375626, -0.11465415]]).T
 
 
+def prunePrm(prm,ntrial=-1):
+    from astar import astar
+    randqueue = random.sample(prm.graph.states.keys(),ntrial) if ntrial>0 else prm.graph.states.keys()
+    for i0,i1 in randqueue:
+        cstar = prm.pathFrom(i0,i1).cost
+        cprm  = prm.graph.edgeCost[i0,i1]
+        if cprm > cstar: 
+            print '\t\t Remove %d-%d'%(i0,i1), '\t(%.1f vs %.1f)' % (cprm,cstar)
+            prm.graph.removeEdge(i0,i1)
 
 # --- INIT PRM ---
 # --- INIT PRM ---
 # --- INIT PRM ---
+#acado.debug()
 if INIT_PRM:
     print 'Init PRM Sample'
-    prm(10,10,10,True)
+    prm(30,10,10,True)
     print 'Connexify'
-    #prm.connexifyPrm(NTRIAL=100,VERBOSE=True)
+    prm.connexifyPrm(NTRIAL=200,VERBOSE=True)
     print 'Densify'
     config(acado,'traj')
-    #prm.densifyPrm(100,VERBOSE=2)
-    prm.graph.save(dataRootPath+'/prm30-100-100')
+    prm.densifyPrm(500,VERBOSE=2)
+    #for i0,i1 in [ k for k,X in graph.states.items() if np.any(X>7) or np.any(X<-7) ]: graph.removeEdge(i0,i1)
+    prm.graph.save(dataRootPath+'/prm30-200-500')
 else:
-    prm.graph.load(dataRootPath+'/prm30-100-100')
+    prm.graph.load(dataRootPath+'/prm30-400-700')
 
-'''
+prunePrm(prm)
 config(acado,'traj')
-acado.iter = 20
+acado.iter = 80
+acado.guessbak = acado.guess
 acado.guess = nnguess
-prm.nearestNeighbors = nnnear
+prm.nearestNeighborbak = prm.nearestNeighbor
+prm.nearestNeighbor = nnnear
+
 
 # --- IREPA LOOP
 # --- IREPA LOOP
@@ -402,6 +423,7 @@ if IREPA_START>0:
     nets        .load('up%02d'%IREPA_START)
     prm.graph   .load(dataRootPath+'/up%02d'%IREPA_START)
     hists =   np.load(dataRootPath+'/hist.npy',hists)
+    hists = np.reshape(hists,1)[0]
 
 for iloop in range(IREPA_START,IREPA_ITER):
     print (('--- IREPA %d ---'%iloop)+'---'*10+'\n')*3,time.ctime()
@@ -429,6 +451,9 @@ except:    pass
 # --- RELOAD
 # --- RELOAD
 
+#acado.run(np.matrix([.5,.5,.5,0,0]+[0]*5).T,zero(10))
+
+'''
 graphs = {}
 for iloop in range(IREPA_ITER+1):
     graphs[iloop] = GraphQuadcopter()

@@ -58,7 +58,7 @@ def config(acado, label, env=None):
     if label == "connect":
         # if 'icontrol' in acado.options: del acado.options['icontrol']
         acado.debug(False)
-        acado.iter = 60
+        acado.iter = 30
         acado.options['steps'] = 20
         acado.options['acadoKKT'] = 0.0001
         acado.options['icontrol'] = acadoTxtPath + 'guess.clt'
@@ -129,6 +129,7 @@ class QuadcopterStateDiff:
 class AcadoQuadConnect(AcadoConnect):
     def __init__(self,*args,**kwargs):
         AcadoConnect.__init__(self,*args,**kwargs)
+        #self.setup_async()
     def states(self,jobid=None):
         X = AcadoConnect.states(self,jobid)
         return X[:,[0,1,2,3,4,6,7,8,9,10]]
@@ -142,11 +143,18 @@ class AcadoQuadConnect(AcadoConnect):
         if U is not None and 'icontrol' in self.options:
             np.savetxt(self.controlFile('i',jobid),np.vstack([T/T[-1], U.T]).T)
         return X,U,T
+    # def run(self,x0,x1,*args,**kwargs):
+    #     jobid = self.run_async(x0,x1,*args,**kwargs)
+    #     try:
+    #         return self.join(jobid,x0,x1,timeout = 10)
+    #     except:
+    #         return False
 
 
 
 env = Quadcopter(withDisplay=False)
-acado = AcadoQuadConnect(acadoBinDir + "connect_quadcopter",
+#acado = AcadoQuadConnect(acadoBinDir + "connect_quadcopter",
+acado = AcadoConnect(acadoBinDir + "connect_quadcopter",
                      datadir=acadoTxtPath)
 config(acado, 'connect', env)
 acado.setDims(env.nq,env.nv)

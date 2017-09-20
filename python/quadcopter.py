@@ -37,7 +37,7 @@ class Quadcopter:
         self.xmax = np.concatenate([self.qmax,self.vmax])
         self.xmin = -self.xmax
 
-        self.umax = np.matrix([mass * 5] * 4).T
+        self.umax = np.matrix([mass * 5] * 4).T *2 # DEBUG
         self.umin = zero(4)
 
         self.withSinCos = False
