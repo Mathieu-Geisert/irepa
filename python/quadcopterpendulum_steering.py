@@ -137,8 +137,8 @@ acado.setDims(env.nq,env.nv)
 
 
 #env.qup = np.matrix([2., 2., 2., np.pi/2, np.pi/2, np.pi/5, np.pi/5 ]).T
-env.qup = np.matrix([1., 1., 1., np.pi/8, np.pi/8, np.pi/10, np.pi/10 ]).T
-env.vup = np.matrix([.2]*5 + [.01]*2).T
+env.qup = np.matrix([1., 1., 1., np.pi/4, np.pi/4, np.pi/6, np.pi/6 ]).T
+env.vup = np.matrix([.3]*5 + [.1]*2).T
 
 env.qmax = np.matrix([5., 5., 5., np.pi/2, np.pi/2, np.pi/3, np.pi/3]).T
 env.vmax = np.matrix([5]*7).T

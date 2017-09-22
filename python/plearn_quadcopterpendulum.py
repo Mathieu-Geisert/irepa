@@ -346,8 +346,8 @@ def nnguess(x0,x1,*dummyargs):
 
 # --- HYPER PARAMS
 INIT_PRM        = False
-IREPA_ITER      = 3
-IREPA_START     = 3  # Start from load
+IREPA_ITER      = 16
+IREPA_START     = 16  # Start from load
 
 
 # --- SETUP ACADO
@@ -397,8 +397,7 @@ if INIT_PRM:
 else:
     prm.graph.load(dataRootPath+'/prm30-50-500')
 
-
-prunePrm(prm)
+#prunePrm(prm)
 config(acado,'traj')
 acado.iter = 80
 acado.guessbak = acado.guess
@@ -426,7 +425,7 @@ for iloop in range(IREPA_START,IREPA_ITER):
     np          .save(dataRootPath+'/hist.npy',hists)
 
     dataset.set()
-    hists[iloop] = nets.train(dataset,nepisodes=int(5e3),track=True,verbose=True)
+    hists[iloop] = nets.train(dataset,nepisodes=int(5e3),track=True,verbose=False)
 
     trajs = checkPrm()
     #plotPrmUpdate(trajs)
@@ -467,6 +466,7 @@ dataset.graph=graph
 #prm.densifyPrm(100,VERBOSE=2)
 '''
 
+'''
 x0 = zero(env.nx)
 x0[0] = 2.5
 x1 = zero(env.nx)
@@ -480,3 +480,4 @@ Xdist = acado.states()
 
 plt.plot(Xpick[:,0],Xpick[:,1])
 plt.plot(Xdist[:,0],Xdist[:,1])
+'''
