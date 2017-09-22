@@ -15,7 +15,7 @@ def astar(graph, start, goal, gdistance = None, hdistance = None):
      costToHere       = { start: 0    }   # cost from start to current node.
 
      # Graph distance
-     if gdistance is None:          gdistance = lambda i1,i2: norm(graph.x[i1]-graph.x[i2])
+     if gdistance is None:          gdistance = lambda i1,i2: graph.edgeCost[i1,i2]
      # Heuristic distance
      if hdistance is None:          hdistance = lambda i1,i2: norm(graph.x[i1]-graph.x[i2])
 
