@@ -3,30 +3,33 @@ from numpy.linalg import inv, norm
 import math
 import time
 import random
-import matplotlib.pylab as plt
-from collections import namedtuple
-import pylab
-from prm import PRM,Graph,NearestNeighbor,DistanceSO3
-from oprm import OptimalPRM
-from specpath import acadoBinDir, acadoTxtPath
-from acado_connect import AcadoConnect
-from quadcopterpendulum_steering import env,acado,config,GraphQuadcopterPendulum,ConnectAcado,QuadcopterPendulumStateDiff,dataRootPath
+import matplotlib.pylab as plt                                  # For plotting graphs
+from collections import namedtuple                              # Tuples with explicit names
+from prm import PRM,Graph,NearestNeighbor,DistanceSO3           # Probabilistic roadmap methods
+from oprm import OptimalPRM                                     # Optimization methods for PRM edges
+from specpath import acadoBinDir, acadoTxtPath                  # Specific path to launch the binary
+from acado_connect import AcadoConnect                          # Wrapping of acado solver
+from quadcopterpendulum_steering  import env,acado,config,GraphQuadcopterPendulum,ConnectAcado,QuadcopterPendulumStateDiff,dataRootPath      # Defines environment and all methods 
 
 plt.ion()
 
+# Initialize the random number generator.
 RANDOM_SEED = 666 #int((time.time()%10)*1000)
 print "Seed = %d" %  RANDOM_SEED
 np .random.seed     (RANDOM_SEED)
 random.seed         (RANDOM_SEED)
 
-# --- ENV ----------------------------------------------------------
-# --- ENV ----------------------------------------------------------
-# --- ENV ----------------------------------------------------------
-
 # --- DATA ---------------------------------------------------------
 # --- DATA ---------------------------------------------------------
 # --- DATA ---------------------------------------------------------
 
+'''
+The Dataset class is used to collect and store a collection of trajectories
+(and the corresponding subtrajectories, typically from a PRM. The initializer
+of the class takes a Graph object (i.e. the result of a PRM), a takes
+subtrajectories of the graph edges to make a dataset. The neural network is
+trained from this dataset.
+'''
 
 def subsample(X, N):
     '''Subsample in N iterations the trajectory X. The output is a 
@@ -92,6 +95,12 @@ class Dataset:
 
 from networks import *
 
+'''
+Implementation of the networks trained from the dataset.  The networks are used
+to approximate 3 functions: the value function V(a,b) which is the minimal cost
+to pay for going from a to b ; the X- ; and the U-trajectories X(a,b) and
+U(a,b) which are the state and control trajectories to go from a to b.
+'''
 
 class Networks:
     BATCH_SIZE = 128
@@ -167,6 +176,8 @@ class Networks:
 # --- ROLL OUT
 
 def trajFromTraj(x0=None, x1=None, withPlot=None, **plotargs):
+    '''Returns a triplet X,U,T (ie a vector sampling the time function) to go
+    from x0 to x1, computed from the networks (global variable).'''
     x0 = x0.T if x0 is not None else env.sample().T
     x1 = x1.T if x1 is not None else env.sample().T
     x = np.hstack([x0, x1])
@@ -182,6 +193,10 @@ def trajFromTraj(x0=None, x1=None, withPlot=None, **plotargs):
 # --- TRAJ OPT
 def optNet(x0=None, x1=None, net=trajFromTraj, withPlot=False, color='r', **plotargs):
     X, U, T = net(x0, x1)
+    '''Takes a trajectory X,U,T from the neural network and optimize it using
+    ACADO. Return the result of the optimization, or raise an error if the
+    optim failed.
+    '''
     if withPlot:
         plt.plot(X[:, 0], X[:, 1], '--', color=color, **plotargs)
 
@@ -206,7 +221,10 @@ def optNet(x0=None, x1=None, net=trajFromTraj, withPlot=False, color='r', **plot
 
 
 # --- PLAY WITH DATA ---------------------------------------------------
-
+'''
+The two following functions are used to "play" with the data/network i.e. get
+results and plot results.
+'''
 def plotGrid(nets, theta=0, idxs = { 0: [-1,1], 1: [-1,1]}, x0 = None,step=1e-2):
     from grid_policy import GridPolicy
     grid = GridPolicy()
@@ -220,22 +238,6 @@ def plotGrid(nets, theta=0, idxs = { 0: [-1,1], 1: [-1,1]}, x0 = None,step=1e-2)
     for x in nets.sess.run(nets.ptrajx.policy, feed_dict={nets.ptrajx.x: np.hstack([X0, 0 * X0])}):
         X = np.reshape(x, [20, env.nx])
         plt.plot(X[:, 0], X[:, 1])
-
-
-# def trial():
-#     graph = dataset.prm.graph
-#     while True:
-#         i0 = random.randint(0,len(graph.x)-1)
-#         if len(graph.children[i0])>0: break
-#     i1 = random.sample(graph.children[i0],1)[0]
-#     print 'Trial from %d to %d' % (i0,i1)
-#     x0 = graph.x[i0]
-#     x1 = graph.x[i1]
-#     Xg = graph.states[i0,i1]
-#     Xr = np.reshape(sess.run(trajx.policy,feed_dict={ trajx.x: np.hstack([x0.T,x1.T]) }),[20,6])
-#     plt.plot(Xg[:,0],Xg[:,1],'r+-')
-#     plt.plot(Xr[:,0],Xr[:,1],'y+-',markeredgewidth=5)
-#     plt.legend('From PRM','From NNet')
 
 
 def trial(i0=None, i1=None):
@@ -257,6 +259,11 @@ def trial(i0=None, i1=None):
 # --- IREPA ALGORTHM ---------------------------------------------------
 # --- IREPA ALGORTHM ---------------------------------------------------
 # --- IREPA ALGORTHM ---------------------------------------------------
+
+'''
+The checkPrm, plotPrmUpdate and updatePrm are functions that check that the
+content of the PRM is as good as the neural-network (NN) approx, and update the PRM
+from the NN if it is not as good.'''
 
 def checkPrm(EPS=.05, verbose=True):
     '''Return a patch that improve the PRM edge cost.'''
@@ -300,6 +307,7 @@ def updatePrm(newTrajs):
 
 
 def expandPRM(prm,NSAMPLE=100,verbose=False):
+    '''ExpandPRM just tries to connect more nodes using the NN approx.'''
     graph   = prm.graph
     connect = prm.connect
     for i in range(NSAMPLE):
@@ -312,6 +320,10 @@ def expandPRM(prm,NSAMPLE=100,verbose=False):
             if verbose: print '\t\t... Yes!'
 
 # --- STEERING METHOD USING PRM -------------------------------------------------
+'''
+These 4 next methods are used to build the warm-start used to initialize ACADO.
+'''
+
 def value(x0,x1):
     '''Distance function between 2 elements using the value neural-net approximation.'''
     return nets.sess.run( nets.value.policy, 
@@ -340,15 +352,18 @@ def nnguess(x0,x1,*dummyargs):
     N = X.shape[0]
     return X,U,np.arange(0.,N)*T/(N-1)
 
-# --- ALGO
-# --- ALGO
-# --- ALGO
+# --- ALGO -------------------------------------------------------------------------------
+# --- ALGO -------------------------------------------------------------------------------
+# --- ALGO -------------------------------------------------------------------------------
 
 # --- HYPER PARAMS
-INIT_PRM        = False
-IREPA_ITER      = 16
-IREPA_START     = 16  # Start from load
-
+INIT_PRM        = True          # Make it True when the PRM should be computed,
+                                # and False when it should be loaded from file
+                                # (from previous computation ... for debug).
+IREPA_ITER      = 5             # Number of total iteration of the IREPA
+IREPA_START     = 0             # If a previous IREPA attend has been run, you
+                                # may want to re-start IREPA at this iteration
+                                # from a saved log file.
 
 # --- SETUP ACADO
 # if 'icontrol' in acado.options: del acado.options['icontrol']
@@ -356,7 +371,6 @@ IREPA_START     = 16  # Start from load
 
 acado.debug(False)
 acado.iter = 80
-config(acado,'connect')
 
 graph   = GraphQuadcopterPendulum()
 graph.addNode(zero(env.nx))
@@ -369,20 +383,10 @@ prm     = OptimalPRM.makeFromPRM(prm,acado=acado,stateDiff=QuadcopterPendulumSta
 dataset = Dataset(prm.graph)
 nets    = Networks(env.nx,env.nu)
 
-def prunePrm(prm,ntrial=-1):
-    from astar import astar
-    randqueue = random.sample(prm.graph.states.keys(),ntrial) if ntrial>0 else prm.graph.states.keys()
-    for i0,i1 in randqueue:
-        cstar = prm.pathFrom(i0,i1).cost
-        cprm  = prm.graph.edgeCost[i0,i1]
-        if cprm > cstar: 
-            print '\t\t Remove %d-%d'%(i0,i1), '\t(%.1f vs %.1f)' % (cprm,cstar)
-            prm.graph.removeEdge(i0,i1)
-
 # --- INIT PRM ---
 # --- INIT PRM ---
 # --- INIT PRM ---
-
+# First build a PRM with optimal-paths as edges, without any strong initialization when calling ACADO.
 if INIT_PRM:
     print 'Init PRM Sample'
     config(acado,'connect')
@@ -392,12 +396,10 @@ if INIT_PRM:
     print 'Densify'
     config(acado,'traj')
     prm.densifyPrm(500,VERBOSE=2)
-    #for i0,i1 in [ k for k,X in graph.states.items() if np.any(X>7) or np.any(X<-7) ]: graph.removeEdge(i0,i1)
     prm.graph.save(dataRootPath+'/prm30-50-500')
 else:
     prm.graph.load(dataRootPath+'/prm30-50-500')
 
-#prunePrm(prm)
 config(acado,'traj')
 acado.iter = 80
 acado.guessbak = acado.guess
@@ -409,8 +411,15 @@ prm.nearestNeighbor = nnnear
 # --- IREPA LOOP
 # --- IREPA LOOP
 # --- IREPA LOOP
-hists = {}
-timings = {}
+
+# From the initial PRM, start the IREPA (iterative roadmap-extension and
+# policy-approximation): train the neural networks to copy the graph ; then
+# replace the bad edges of the graph using the neural network ; finally tries
+# to extend the PRM by creating new edges.
+
+hists = {}              # Stores datalog about how the NN optimization was.
+timings = {}            # Stores timings about the IREPA schedule.
+
 if IREPA_START>0:
     nets        .load('up%02d'%IREPA_START)
     prm.graph   .load(dataRootPath+'/up%02d'%IREPA_START)
@@ -419,20 +428,23 @@ if IREPA_START>0:
 
 for iloop in range(IREPA_START,IREPA_ITER):
     print (('--- IREPA %d ---'%iloop)+'---'*10+'\n')*3,time.ctime()
+
+    # First get timings, save current NN and PRM states in files.
     timings[iloop] = time.ctime()
     nets        .save('up%02d'%iloop)
     prm.graph   .save(dataRootPath+'/up%02d'%iloop)
     np          .save(dataRootPath+'/hist.npy',hists)
 
+    # Get the dataset from the PRM and train the NN
     dataset.set()
     hists[iloop] = nets.train(dataset,nepisodes=int(5e3),track=True,verbose=False)
 
+    # Improve the PRM using the NN
     trajs = checkPrm()
-    #plotPrmUpdate(trajs)
     updatePrm(trajs)
-
     expandPRM(prm,500,verbose=True)
 
+# At the end of the loop, save the NN and the PRM for future debug.
 try:
     iloop += 1
     nets.save('up%02d'%iloop)
@@ -443,9 +455,8 @@ except:    pass
 # --- RELOAD
 # --- RELOAD
 
-#acado.run(np.matrix([.5,.5,.5,0,0]+[0]*5).T,zero(10))
-
 '''
+# If you want, you can now load or re-load the IREPA history and play with the results.
 graphs = {}
 for iloop in range(IREPA_ITER+1):
     graphs[iloop] = GraphQuadcopter()
@@ -453,31 +464,6 @@ for iloop in range(IREPA_ITER+1):
 
 nets.load('up%02d'%IREPA_ITER)
 graph=graphs[IREPA_ITER]
-#hists=np.load(dataRootPath+'/hist.npy').reshape(1)[0]
-
-dataset.graph=graph
-#dataset.set()
-#h = nets.train(dataset,nepisodes=int(5e3),track=True,verbose=True)
-
-
-#prm.graph  = graph   = GraphQuadcopter()
-#prm(10,10,10,True)
-#prm.connexifyPrm(NTRIAL=100,VERBOSE=True)
-#prm.densifyPrm(100,VERBOSE=2)
+hists=np.load(dataRootPath+'/hist.npy').reshape(1)[0]
 '''
 
-'''
-x0 = zero(env.nx)
-x0[0] = 2.5
-x1 = zero(env.nx)
-acado.run(x0,x1)
-Xpick = acado.states()
-
-
-x0[0] = .4; x0[-2] = .2; x0[-1] = 1.
-acado.run(x0,x1)
-Xdist = acado.states()
-
-plt.plot(Xpick[:,0],Xpick[:,1])
-plt.plot(Xdist[:,0],Xdist[:,1])
-'''
